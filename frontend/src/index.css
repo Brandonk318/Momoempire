@@ -1,0 +1,205 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* -----------------------------------------------------------
+ * AI Office Platform — Hardware Elite, Face Swappable design system
+ * ----------------------------------------------------------- */
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Outfit:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+@layer base {
+    :root {
+        /* Shadcn core tokens (light) */
+        --background: 220 20% 98%;
+        --foreground: 222 32% 8%;
+        --card: 0 0% 100%;
+        --card-foreground: 222 32% 8%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 222 32% 8%;
+        --primary: 222 32% 8%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 220 15% 95%;
+        --secondary-foreground: 222 32% 8%;
+        --muted: 220 15% 95%;
+        --muted-foreground: 220 10% 44%;
+        --accent: 220 15% 94%;
+        --accent-foreground: 222 32% 8%;
+        --destructive: 0 72% 51%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 220 15% 90%;
+        --input: 220 15% 90%;
+        --ring: 222 32% 8%;
+        --radius: 0.75rem;
+
+        /* ---- Tenant branding (swappable face). Defaults = "elite" obsidian. */
+        --tenant-primary: #0a0a0a;
+        --tenant-primary-soft: #1b1c1e;
+        --tenant-accent: #2563eb;
+        --tenant-ink: #0a0a0a;
+    }
+    .dark {
+        --background: 222 32% 6%;
+        --foreground: 220 20% 96%;
+        --card: 222 30% 9%;
+        --card-foreground: 220 20% 96%;
+        --popover: 222 30% 9%;
+        --popover-foreground: 220 20% 96%;
+        --primary: 220 20% 96%;
+        --primary-foreground: 222 32% 8%;
+        --secondary: 222 20% 14%;
+        --secondary-foreground: 220 20% 96%;
+        --muted: 222 20% 14%;
+        --muted-foreground: 220 10% 65%;
+        --accent: 222 20% 16%;
+        --accent-foreground: 220 20% 96%;
+        --destructive: 0 62% 45%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 222 20% 18%;
+        --input: 222 20% 18%;
+        --ring: 220 20% 90%;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    html,
+    body,
+    #root {
+        height: 100%;
+    }
+    body {
+        margin: 0;
+        font-family:
+            "Outfit", ui-sans-serif, system-ui, -apple-system, Segoe UI,
+            sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        @apply bg-background text-foreground;
+    }
+    .font-display {
+        font-family: "Fraunces", ui-serif, Georgia, serif;
+        font-feature-settings: "ss01", "ss02";
+        letter-spacing: -0.02em;
+    }
+    .font-mono {
+        font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    }
+}
+
+/* Marketing (dark premium) */
+.marketing-shell {
+    background: radial-gradient(
+            1200px 600px at 20% -10%,
+            rgba(37, 99, 235, 0.18),
+            transparent 60%
+        ),
+        radial-gradient(
+            900px 500px at 110% 20%,
+            rgba(217, 70, 239, 0.12),
+            transparent 60%
+        ),
+        #050507;
+    color: #e6e6ea;
+    min-height: 100vh;
+}
+
+.marketing-noise {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.04 0'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.6'/></svg>");
+    mix-blend-mode: screen;
+    pointer-events: none;
+}
+
+.glass-crystal {
+    background: rgba(10, 10, 12, 0.6);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-crystal-light {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    border: 1px solid rgba(10, 10, 12, 0.06);
+}
+
+/* Tenant-brand button */
+.btn-tenant {
+    background: var(--tenant-primary);
+    color: #fff;
+    transition:
+        transform 0.18s ease,
+        background-color 0.18s ease;
+}
+.btn-tenant:hover {
+    background: var(--tenant-primary-soft);
+    transform: translateY(-1px);
+}
+
+.ring-tenant {
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--tenant-primary) 20%, transparent);
+}
+
+/* Overlines */
+.overline {
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    font-size: 11px;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+}
+
+/* Dashboard surface */
+.surface {
+    @apply bg-card border border-border rounded-xl;
+}
+.surface-elevated {
+    @apply bg-card border border-border rounded-xl shadow-[0_1px_0_rgba(0,0,0,0.04),0_8px_24px_-16px_rgba(10,10,12,0.18)];
+}
+
+/* Dotted grid background accent */
+.dot-grid {
+    background-image: radial-gradient(
+        rgba(10, 10, 12, 0.08) 1px,
+        transparent 1px
+    );
+    background-size: 20px 20px;
+}
+.dot-grid-dark {
+    background-image: radial-gradient(
+        rgba(255, 255, 255, 0.08) 1px,
+        transparent 1px
+    );
+    background-size: 20px 20px;
+}
+
+/* Hover-lift utility */
+.lift {
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
+}
+.lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 30px -18px rgba(10, 10, 12, 0.3);
+}
+
+/* Scrollbar refinement */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+}
+
+/* Marker: platform splash */
+[data-emergent-splash] {
+    display: none;
+}

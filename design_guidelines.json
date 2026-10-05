@@ -1,0 +1,78 @@
+{
+  "project_philosophy": "Hardware Elite, Face Swappable. We build an AI employee and digital office.",
+  "theme": {
+    "strategy": "Light theme by default for the platform dashboard to maximize legibility for non-technical SMB owners. Dark/Premium theme for Marketing page for immersion. Provide a toggle.",
+    "face_swappable": "Establish a robust CSS variable system in index.css (e.g., --tenant-primary) mapped to Tailwind colors so the platform admin can inject specific tenant branding seamlessly over the 'hardware elite' grayscale structure."
+  },
+  "typography": {
+    "headings": "Cabinet Grotesk (Sharp, elite, structural)",
+    "body": "Satoshi or Outfit (Clean, highly legible)",
+    "monospace": "IBM Plex Mono (For metrics, ids, tabular data)",
+    "rules": [
+      "No generic sans like Inter or Roboto for headings.",
+      "Headings > 32px must use tracking-tight.",
+      "Overlines must be uppercase, tiny, wide spacing (tracking-[0.2em]).",
+      "Do not use Space Grotesk."
+    ]
+  },
+  "colors": {
+    "archetype": "Swiss & High-Contrast (Authority, Clarity)",
+    "base": "Structural grayscale. Off-white backgrounds (slate-50/zinc-50) with crisp white panels. Heavy reliance on 1px borders.",
+    "primary_tenant": "CSS Variable driven (--primary). Default to Deep Obsidian (#0A0A0A) or Elite Cobalt for the base platform.",
+    "rules": [
+      "Avoid #7351B7 and #1B93A4.",
+      "Always tint neutral greys with a slight cool blue/slate tone.",
+      "Never use complete transparent backgrounds for overlays/dropdowns. Use glassmorphism or solid.",
+      "Only use primary/brand color for CTAs like buttons and forms. Limit the use of primary color."
+    ]
+  },
+  "layouts": {
+    "marketing_page": "Bento 'Tetris' Grid. Asymmetric. Generous spacing (p-12, p-24). Overlapping elements. Use Lenis smooth scrolling.",
+    "dashboard": "High Density Grid. The 20-item sidebar MUST be categorized using logical groups (e.g., Workspace, Communications, Tools, Administration) with overline headers to avoid overwhelming the user.",
+    "onboarding_wizard": "SaaSFrame pattern. Multi-step split screen (left visual/art, right form) with clear progress indicators, utilizing generous padding."
+  },
+  "visual_enhancers": {
+    "glassmorphism": "Crystal variant for sticky elements. High opacity (bg-white/70 or bg-black/60), backdrop-blur-xl, backdrop-saturate-150, 1px inner stroke.",
+    "surfaces": "Dashboard widgets should be flat solid surfaces with 1px border (border-border). No heavy shadows on resting state. Use subtle roundness (max 12px or rounded-xl)."
+  },
+  "components": {
+    "strategy": "HTML/Tailwind for marketing layouts. Custom Shadcn UI for dashboard and wizard.",
+    "customizations": "Override default Shadcn styles. Ensure generous padding, sharp interactions, and layered shadows on interactive states.",
+    "forbidden": "No HTML native selects or date pickers. Use Shadcn components exclusively for complex interactions."
+  },
+  "motion": {
+    "libraries": "Framer Motion, Lenis (marketing).",
+    "rules": "No universal 'transition: all'. Explicit transitions only (e.g., transition: transform 0.2s ease). Staggered list entrances. Hover lift (-translate-y-1) for cards."
+  },
+  "media_and_images": {
+    "hero_marketing": {
+      "url": "https://images.unsplash.com/photo-1598221860268-4c711f099b6d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2ODl8MHwxfHNlYXJjaHw0fHxzbWFsbCUyMGJ1c2luZXNzJTIwb3duZXIlMjByZWxheGVkfGVufDB8fHx8MTc5MTI0MjI4N3ww&ixlib=rb-4.1.0&q=85",
+      "description": "Relaxed SMB owner. Use for emotional hook on the marketing site."
+    },
+    "ai_concept": {
+      "url": "https://images.unsplash.com/photo-1498262257252-c282316270bc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwyfHxhYnN0cmFjdCUyMHN0cnVjdHVyYWwlMjB0ZWNobm9sb2d5fGVufDB8fHx8MTc5MTI0MjI4N3ww&ixlib=rb-4.1.0&q=85",
+      "description": "Curved architectural ribs representing elite structural AI/tech framework."
+    },
+    "digital_office": {
+      "url": "https://images.unsplash.com/photo-1705909770198-7e83c24e1616?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwzfHxtb2Rlcm4lMjBtaW5pbWFsJTIwb2ZmaWNlfGVufDB8fHx8MTc5MTI0MjI4N3ww&ixlib=rb-4.1.0&q=85",
+      "description": "Premium minimal office desk representing the 'done for you' digital workspace."
+    }
+  },
+  "accessibility": {
+    "testing": "All interactive/key elements MUST have data-testid attributes (e.g., data-testid='tenant-sidebar-item').",
+    "contrast": "Minimum 4.5:1 for small text. Explicit hover text colors (e.g., hover:bg-slate-900 hover:text-white)."
+  },
+  "instructions_to_main_agent": [
+    "You tend to converge toward generic outputs. Break the mold. Do not make generic centered layouts or simplistic gradients.",
+    "Establish the 'hardware elite' structure first-crisp borders, exact padding, flawless grids-then inject the 'swappable face' (tenant primary color).",
+    "Create depth through layered design elements with z-index hierarchy and crystal glass-morphism.",
+    "Do not center-align the app container globally. Left-align text for dense content.",
+    "Use Phosphor icons or Lucide icons.",
+    "Use sonner for toasts. Do not use plain HTML for notifications.",
+    "Do not use placeholder text for missing images. Use the provided Unsplash URLs.",
+    "Never apply universal transitions (transition: all).",
+    "Grid Layouts: Ensure grid children are direct descendants.",
+    "Since the dashboard has 20 sections, grouping them is paramount for the non-technical user. Grouping ideas: AI Employee, Communications (Calls, Messages), Business (Leads, Customers, Appointments, Services, Payments, Website, Portal, Reviews), Analytics & Intelligence (Analytics, Advisor, Knowledge Base), Settings & Setup (Automations, Integrations, Phone Numbers, Usage, Billing, Settings).",
+    "Always apply GENERAL UI UX DESIGN GUIDELINES: micro-animations, 2-3x more spacing, and sharp button styles."
+  ]
+}
