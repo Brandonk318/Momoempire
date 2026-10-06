@@ -142,3 +142,19 @@ class TestMarketAwareOnboarding:
             "address": {"country": "ZZ"},
         }, timeout=20)
         assert onboard.status_code == 400
+
+
+class TestLaunchNicheProfiles:
+    @pytest.mark.parametrize("slug,office_name", [
+        ("hvac", "The HVAC Office"),
+        ("plumbing", "The Plumbing Office"),
+        ("pest-control", "The Pest Control Office"),
+    ])
+    def test_first_three_niches_have_launch_profiles(self, slug, office_name):
+        r = requests.get(f"{API}/industries/{slug}", timeout=15)
+        assert r.status_code == 200, r.text
+        profile = r.json().get("office_profile") or {}
+        assert profile.get("office_name") == office_name
+        assert profile.get("hero")
+        assert profile.get("cta")
+        assert len(profile.get("value_props") or []) >= 4
