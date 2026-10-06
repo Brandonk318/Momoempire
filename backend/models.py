@@ -278,6 +278,7 @@ class TenantUpdate(BaseModel):
     branding: Optional[Branding] = None
     ai_employee: Optional[AIEmployee] = None
     review_url: Optional[str] = None  # Google Business review URL used by review-request flow
+    country: Optional[str] = None
 
 
 # ---------- Country ----------
