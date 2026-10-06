@@ -1,0 +1,35 @@
+{
+  "summary": "Phase 9 full-stack testing complete. Backend: 10/10 pytest in /app/backend/tests/test_phase9.py pass — smoke /api/health, tenants.review_url PUT persistence, callback schedule/list/cancel on /api/growth/callbacks (status transitions scheduled→cancelled), cron /api/cron/callbacks-due 401 without Bearer and 200 {accepted:true} with WEBHOOK_CRON_SECRET, 24h appointment confirmation cron populates confirm_sent_at on appt, SMS inbound-sim YES→appt status='confirmed' with 'Great — you\\'re confirmed!' reply, RESCHEDULE→status='canceled'+reschedule_requested=true with reply mentioning new time, CANCEL→status='canceled', review-request-2h follow-up job created on appointment status→completed with send_at ~2h in future (±0.5h), /api/growth/heatmap?days=90 aggregates leads by ZIP (78701/78702/75201) with totals.regions≥3 & leads_total≥3, /api/growth/standup/today.ics returns text/calendar body starting BEGIN:VCALENDAR with DTSTART/SUMMARY/END:VCALENDAR. Frontend: /app/growth renders all 9 tabs (digest/winback/referrals/postjob/reviews/standup/social/callbacks/heatmap). Callbacks tab fills cb-phone/cb-name/cb-when (datetime-local)/cb-note, cb-save-btn creates row cb-{id} with status 'scheduled'; cb-cancel-{id} transitions to 'cancelled'. Heatmap tab renders heatmap-tab with heatmap-range-30/90/365 clickable without error. Standup tab exposes standup-ics-btn whose anchor href ends with '/api/growth/standup/today.ics' and has download attribute. Leads kanban shows lead-callback-{id} pill button inline for leads with a phone. Nominatim was reachable during this run but request allows for rate-limiting (rows still return without lat/lon).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase9.py",
+    "/app/test_reports/pytest/phase9_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routers/phase9._run_due_callbacks: when Twilio creds exist it DOES NOT guard against being called twice for the same job between the time the Twilio call is placed and the followup_jobs status update; a slow DB write could cause a duplicate dial on a retried cron. Consider updating status to 'sending' with a conditional update BEFORE calling Twilio (compare-and-set on status='scheduled').",
+    "routers/phase9.handle_confirmation_reply only inspects the next 48h window and picks the earliest appt. If a customer has two upcoming appts, replying 'YES' always confirms the sooner one — fine for most cases but if the earlier is already confirmed and the later is pending, YES silently reconfirms the first. Consider skipping already-confirmed appts when the reply is unambiguous.",
+    "routers/phase9.service_area_heatmap geocodes top ZIPs sequentially inside the request path with a 10s timeout each × 12 — that is up to 120s added latency on a cold cache. Move geocode fan-out to asyncio.gather with a semaphore of 3-4, or do it lazily in a background job and persist lat/lon on the bucket.",
+    "routers/phase9.schedule_review_request_2h uses db.followup_jobs.update_one with upsert and $set that always rewrites 'id' and 'created_at'. On re-trigger (status flipped completed→scheduled→completed) you'll keep the same (tenant_id, appointment_id, kind) doc but mutate id and created_at — this breaks any downstream reference by id. Use $setOnInsert for id/created_at and $set for send_at/body only.",
+    "routers/phase9.standup_ics does not include a VTIMEZONE and uses the current moment as DTSTART; most calendar clients will render it as 'now' instead of a planned morning slot. Consider pinning DTSTART to 08:00 local or using the business's working hours.",
+    "routers/cron.cron_callbacks_due + cron_appt_confirmations ack 2xx and fire asyncio.create_task — if the worker is restarted mid-cron the batch is lost. Consider persisting a cron_runs row with status so retries can detect in-progress work (same comment made in iteration 7 for daily-standup; still unaddressed)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase9.py"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (5 UI flows: 9 tabs render + callbacks CRUD + heatmap ranges + standup ICS link + lead-callback inline pill)"},
+  "test_credentials": "Fresh test_p9_*/ui_p9_* owner registered per run with password testpass123; business_name P9Biz<rand>/UIBiz<rand>. No seeded admin needed.",
+  "seed_data_creation": "Per run: 1 tenant+1 user; review_url set via PUT /api/tenants/me; 1 callback job (scheduled→cancelled); 3 appointments (YES/RESCHEDULE/CANCEL flows); 1 appointment completed→triggers review-request-2h; 3 leads with Austin+Dallas ZIPs for heatmap; 1 lead for frontend lead-callback button. All TEST_P9_* prefixed data stays in Mongo; harmless for repeat runs.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Phase 9 is green end-to-end. test_phase9.py reads MONGO_URL/DB_NAME/WEBHOOK_CRON_SECRET from /app/backend/.env and REACT_APP_BACKEND_URL from /app/frontend/.env. Note: Lead creation endpoint is POST /api/tenants/leads (NOT /api/leads). The appointment confirmation cron is idempotent via confirm_sent_at — if the confirmation cron ran recently for the same tenant, re-running won't re-SMS. For heatmap test, Nominatim was responsive on this run; if it rate-limits in future, rows still return without lat/lon which is acceptable per request. ICS endpoint response Content-Disposition sets a filename based on date so test asserts only the body prefix. Review-request-2h is stored in db.followup_jobs with upsert key tenant_id+appointment_id+kind — do NOT expect it in GET /api/sales/followups to be filtered; it IS returned.",
+  "rca of the issue": "n/a — no bugs found this iteration."
+}

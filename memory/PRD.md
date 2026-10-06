@@ -76,5 +76,11 @@ All four phases ship as **one coherent multi-tenant platform**. Adding a new ind
 - **Daily owner standup**: `/api/growth/standup/preview|send` summarizes today's appointments, hot leads, pending nudges, and missed-call count. Cron `daily-standup` fires 13:00 UTC (~9am ET / 7am MT); SMS + email delivery.
 - **Weekly social post drafter**: `/api/growth/social/draft` writes a Monday Facebook/Instagram caption with win stats + hashtags. One-tap "Copy caption + tags."
 - `AppointmentIn` extended with `customer_email`, `customer_id`, `lead_id` so the full post-job pipeline (SMS + email + CRM linkback) activates.
-- Crons live: 5 total (`followups-dispatch` /15m, `appt-reminders` hourly, `overage-nightly` 02:30, `weekly-digest` Mon 14:00, `daily-standup` 13:00). All bearer-authed via `WEBHOOK_CRON_SECRET`.
+### Phase 9 — Autopilot complete (Oct 2026) ✅
+- **Call-back scheduler**: `/api/growth/callbacks` CRUD; cron `callbacks-due` fires every 5m — places real Twilio outbound call with TwiML greeting routed into the existing receptionist pipeline. Demo-mode falls back to SMS'ing the owner.
+- **24h appointment auto-confirmation**: cron `appt-confirmations` (xx:25 hourly) sends a "YES / RESCHEDULE / CANCEL" SMS 24h before each appointment. Inbound SMS (real Twilio or simulator) is intercepted and updates appointment status.
+- **Review-request autopilot (2h)**: On post-job completion, if `review_url` is set, schedules an SMS 2 hours later asking for a Google review.
+- **Service-area heatmap**: `/api/growth/heatmap` aggregates leads+customers by extracted ZIP, geocodes top ZIPs via Nominatim (cached in `geocode_cache`), returns bar + pin-map data. Recharts bar + inline SVG pin map in UI.
+- **Google Calendar ICS**: `/api/growth/standup/today.ics` streams a VEVENT with today's agenda. Owner clicks "Add to Calendar" on Standup tab → opens in Google / Apple / Outlook.
+- Crons live: 7 total (`followups-dispatch` /15m, `callbacks-due` /5m, `appt-confirmations` :25 hourly, `appt-reminders` hourly, `overage-nightly` 02:30, `weekly-digest` Mon 14:00, `daily-standup` 13:00).
 
