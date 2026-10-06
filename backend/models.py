@@ -274,6 +274,7 @@ class TenantUpdate(BaseModel):
     appointment_availability: Optional[str] = None
     branding: Optional[Branding] = None
     ai_employee: Optional[AIEmployee] = None
+    review_url: Optional[str] = None  # Google Business review URL used by review-request flow
 
 
 # ---------- Country ----------

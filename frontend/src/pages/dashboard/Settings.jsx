@@ -88,6 +88,7 @@ export default function Settings() {
         name: tenant.name, description: tenant.description,
         contact_phone: tenant.contact_phone, contact_email: tenant.contact_email || null,
         website: tenant.website, branding: tenant.branding,
+        review_url: tenant.review_url || null,
       });
       toast.success("Workspace saved");
     } catch (e) { toast.error(errMessage(e)); }
@@ -132,6 +133,10 @@ export default function Settings() {
               <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={tenant.contact_email || ""} onChange={(e) => setTenant({ ...tenant, contact_email: e.target.value })} data-testid="settings-email-input" /></div>
             </div>
             <div className="space-y-1.5"><Label>Website</Label><Input value={tenant.website || ""} onChange={(e) => setTenant({ ...tenant, website: e.target.value })} placeholder="https://" /></div>
+            <div className="space-y-1.5">
+              <Label>Google Business review URL <span className="text-[11px] text-muted-foreground">(used by AI review requests)</span></Label>
+              <Input value={tenant.review_url || ""} onChange={(e) => setTenant({ ...tenant, review_url: e.target.value })} placeholder="https://g.page/r/your-business/review" data-testid="settings-review-url-input" />
+            </div>
           </div>
         </TabsContent>
 
