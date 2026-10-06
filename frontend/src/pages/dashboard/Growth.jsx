@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Mail, Rocket, Gift, Copy, PlayCircle } from "lucide-react";
+import { Mail, Rocket, Gift, Copy, PlayCircle, Sparkles, MessageSquareText, Sunrise, Share2 } from "lucide-react";
 
 function DigestTab() {
   const [d, setD] = useState(null);
@@ -191,17 +191,168 @@ function ReferralsTab() {
 export default function Growth() {
   return (
     <div data-testid="growth-page">
-      <PageHeader eyebrow="Growth" title="Grow revenue" description="Weekly digest, win-back campaigns, and referrals — on autopilot." />
+      <PageHeader eyebrow="Growth" title="Grow revenue" description="Weekly digest, win-back campaigns, referrals, and more — on autopilot." />
       <Tabs defaultValue="digest">
         <TabsList>
           <TabsTrigger value="digest" data-testid="growth-tab-digest">Weekly digest</TabsTrigger>
           <TabsTrigger value="winback" data-testid="growth-tab-winback">Win-back</TabsTrigger>
           <TabsTrigger value="referrals" data-testid="growth-tab-referrals">Referrals</TabsTrigger>
+          <TabsTrigger value="postjob" data-testid="growth-tab-postjob">Post-job</TabsTrigger>
+          <TabsTrigger value="reviews" data-testid="growth-tab-reviews">Review replies</TabsTrigger>
+          <TabsTrigger value="standup" data-testid="growth-tab-standup">Standup</TabsTrigger>
+          <TabsTrigger value="social" data-testid="growth-tab-social">Social draft</TabsTrigger>
         </TabsList>
         <TabsContent value="digest"><DigestTab /></TabsContent>
         <TabsContent value="winback"><WinbackTab /></TabsContent>
         <TabsContent value="referrals"><ReferralsTab /></TabsContent>
+        <TabsContent value="postjob"><PostJobTab /></TabsContent>
+        <TabsContent value="reviews"><ReviewReplyTab /></TabsContent>
+        <TabsContent value="standup"><StandupTab /></TabsContent>
+        <TabsContent value="social"><SocialDraftTab /></TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function PostJobTab() {
+  const [runs, setRuns] = useState([]);
+  const load = () => api.get("/growth/post-job/runs").then((r) => setRuns(r.data));
+  useEffect(() => { load(); }, []);
+  return (
+    <div className="surface p-6" data-testid="postjob-tab">
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="overline"><Sparkles className="h-3.5 w-3.5 inline mr-1" />Post-job autopilot</div>
+          <p className="text-sm text-muted-foreground mt-2 max-w-xl">
+            When you mark an appointment <strong>Completed</strong>, the AI instantly texts the customer a
+            thank-you + review link, then schedules a win-back nudge 60 days later. No action needed.
+          </p>
+        </div>
+        <Button variant="outline" onClick={load} data-testid="postjob-refresh"><PlayCircle className="h-4 w-4 mr-1" />Refresh</Button>
+      </div>
+      <ul className="mt-5 divide-y divide-border">
+        {runs.map((r) => (
+          <li key={r.id} className="py-3 flex items-center gap-3" data-testid={`postjob-run-${r.id}`}>
+            <div className="flex-1 min-w-0">
+              <div className="font-medium truncate">{r.customer_name} · {r.service}</div>
+              <div className="text-[11px] text-muted-foreground font-mono">
+                thanks: sms={r.thanks_sent?.sms || "—"} email={r.thanks_sent?.email ? "sent" : "—"}
+                {r.winback_scheduled_for ? ` · winback → ${new Date(r.winback_scheduled_for).toLocaleDateString()}` : ""}
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground">{new Date(r.created_at).toLocaleString()}</div>
+          </li>
+        ))}
+        {runs.length === 0 && <li className="py-6 text-sm text-muted-foreground text-center">No post-job runs yet. Mark an appointment Completed to fire the autopilot.</li>}
+      </ul>
+    </div>
+  );
+}
+
+function ReviewReplyTab() {
+  const [form, setForm] = useState({ review_text: "", rating: 5, customer_name: "" });
+  const [out, setOut] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const run = async () => {
+    setLoading(true);
+    try { const { data } = await api.post("/growth/review-response", form); setOut(data); } catch (e) { toast.error(errMessage(e)); }
+    finally { setLoading(false); }
+  };
+  const copy = () => { navigator.clipboard.writeText(out.reply); toast.success("Reply copied"); };
+  return (
+    <div className="grid grid-cols-12 gap-5" data-testid="review-reply-tab">
+      <div className="col-span-12 lg:col-span-7 surface p-6 space-y-3">
+        <div className="overline"><MessageSquareText className="h-3.5 w-3.5 inline mr-1" />Paste a customer review</div>
+        <div className="grid grid-cols-2 gap-3">
+          <Input placeholder="Customer name" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} data-testid="review-customer" />
+          <Input type="number" min={1} max={5} value={form.rating} onChange={(e) => setForm({ ...form, rating: Number(e.target.value) })} data-testid="review-rating" />
+        </div>
+        <Textarea rows={5} placeholder="Paste the review text here..." value={form.review_text} onChange={(e) => setForm({ ...form, review_text: e.target.value })} data-testid="review-text" />
+        <Button className="btn-tenant" onClick={run} disabled={!form.review_text || loading} data-testid="review-draft-btn"><Sparkles className="h-4 w-4 mr-1" />{loading ? "Drafting…" : "Draft reply"}</Button>
+      </div>
+      <div className="col-span-12 lg:col-span-5 surface p-6">
+        <div className="overline">AI-drafted reply</div>
+        {out ? (
+          <>
+            <Badge variant="secondary" className="mt-2">{out.tone} · {out.method}</Badge>
+            <p className="mt-3 text-sm italic">"{out.reply}"</p>
+            <Button variant="outline" size="sm" className="mt-3" onClick={copy} data-testid="review-copy-btn"><Copy className="h-3.5 w-3.5 mr-1" />Copy</Button>
+          </>
+        ) : <p className="text-sm text-muted-foreground mt-2">Paste a review on the left to see a draft reply here.</p>}
+      </div>
+    </div>
+  );
+}
+
+function StandupTab() {
+  const [p, setP] = useState(null);
+  const [sending, setSending] = useState(false);
+  const load = () => api.get("/growth/standup/preview").then((r) => setP(r.data));
+  useEffect(() => { load(); }, []);
+  const send = async () => {
+    setSending(true);
+    try { const { data } = await api.post("/growth/standup/send"); toast.success(`Standup sent: ${data.sent?.sms || "—"} / ${data.sent?.email ? "email" : "—"}`); } catch (e) { toast.error(errMessage(e)); }
+    finally { setSending(false); }
+  };
+  if (!p) return <div className="text-sm text-muted-foreground">Loading…</div>;
+  return (
+    <div className="grid grid-cols-12 gap-5" data-testid="standup-tab">
+      <div className="col-span-12 lg:col-span-7 surface p-6">
+        <div className="overline"><Sunrise className="h-3.5 w-3.5 inline mr-1" />Today</div>
+        <div className="grid grid-cols-3 gap-3 mt-3">
+          <div className="rounded-lg border border-border p-3"><div className="text-[11px] uppercase text-muted-foreground">Appointments</div><div className="font-display text-2xl mt-1" data-testid="standup-appts">{p.appointments.length}</div></div>
+          <div className="rounded-lg border border-border p-3"><div className="text-[11px] uppercase text-muted-foreground">Hot leads</div><div className="font-display text-2xl mt-1" data-testid="standup-hot">{p.hot_leads.length}</div></div>
+          <div className="rounded-lg border border-border p-3"><div className="text-[11px] uppercase text-muted-foreground">Follow-ups queued</div><div className="font-display text-2xl mt-1" data-testid="standup-pending">{p.pending_followups}</div></div>
+        </div>
+        {p.appointments.length > 0 && (
+          <ul className="mt-5 divide-y divide-border">
+            {p.appointments.map((a) => (
+              <li key={a.id} className="py-2 text-sm">
+                <div className="font-medium">{a.customer_name} · {a.service_name}</div>
+                <div className="text-[11px] text-muted-foreground">{new Date(a.start_at).toLocaleTimeString()} · {a.customer_phone}</div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="col-span-12 lg:col-span-5 surface p-6">
+        <div className="overline">Send me the standup</div>
+        <p className="text-sm text-muted-foreground mt-2">We auto-send this to your workspace contact phone + email every morning. Tap below for an instant one.</p>
+        <Button className="btn-tenant mt-4" onClick={send} disabled={sending} data-testid="standup-send-btn"><Sunrise className="h-4 w-4 mr-1" />{sending ? "Sending…" : "Send to me now"}</Button>
+      </div>
+    </div>
+  );
+}
+
+function SocialDraftTab() {
+  const [out, setOut] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const run = async () => {
+    setLoading(true);
+    try { const { data } = await api.post("/growth/social/draft"); setOut(data); } catch (e) { toast.error(errMessage(e)); }
+    finally { setLoading(false); }
+  };
+  const copy = () => { navigator.clipboard.writeText(out.caption + "\n\n" + (out.hashtags || []).join(" ")); toast.success("Caption copied"); };
+  return (
+    <div className="surface p-6" data-testid="social-tab">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="overline"><Share2 className="h-3.5 w-3.5 inline mr-1" />Weekly social post</div>
+          <p className="text-sm text-muted-foreground mt-2 max-w-xl">
+            One-tap Facebook/Instagram caption drafted from this week's wins. Perfect for Monday mornings.
+          </p>
+        </div>
+        <Button className="btn-tenant" onClick={run} disabled={loading} data-testid="social-draft-btn"><Sparkles className="h-4 w-4 mr-1" />{loading ? "Drafting…" : "Draft caption"}</Button>
+      </div>
+      {out && (
+        <div className="mt-5 rounded-xl border border-border p-5" data-testid="social-result">
+          <p className="whitespace-pre-wrap">{out.caption}</p>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {(out.hashtags || []).map((h) => <Badge key={h} variant="secondary" className="font-mono text-[11px]">{h}</Badge>)}
+          </div>
+          <Button variant="outline" size="sm" className="mt-4" onClick={copy} data-testid="social-copy-btn"><Copy className="h-3.5 w-3.5 mr-1" />Copy caption + tags</Button>
+        </div>
+      )}
     </div>
   );
 }

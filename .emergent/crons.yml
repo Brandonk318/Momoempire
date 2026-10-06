@@ -27,3 +27,10 @@ crons:
     method: POST
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
     enabled: true
+  - name: daily-standup
+    description: "7am local-ish SMS/email standup to owners: today's agenda + hot leads"
+    cron: "0 13 * * *"
+    endpoint: "{{BASE_URL}}/api/cron/daily-standup"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true

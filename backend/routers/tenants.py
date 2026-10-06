@@ -221,12 +221,20 @@ async def create_appointment(data: AppointmentIn, user: dict = Depends(require_t
 @router.put("/appointments/{appt_id}")
 async def update_appointment(appt_id: str, data: AppointmentIn, user: dict = Depends(require_tenant_user)):
     db = get_db()
+    prev = await db.appointments.find_one({"id": appt_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "status": 1})
     res = await db.appointments.update_one(
         {"id": appt_id, "tenant_id": user["tenant_id"]},
         {"$set": data.model_dump()},
     )
     if res.matched_count == 0:
         raise HTTPException(404, "Appointment not found")
+    # Fire post-job automation when transitioning to 'completed'
+    if (prev or {}).get("status") != "completed" and data.model_dump().get("status") == "completed":
+        try:
+            from routers.post_job import run_post_job
+            await run_post_job(user["tenant_id"], appt_id)
+        except Exception as e:
+            print(f"[post-job trigger] {e}")
     return await db.appointments.find_one({"id": appt_id}, {"_id": 0})
 
 

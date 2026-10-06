@@ -124,3 +124,13 @@ async def cron_appointment_reminders(request: Request):
         raise HTTPException(401, "unauthorized")
     asyncio.create_task(_run_appointment_reminders())
     return {"accepted": True}
+
+
+@router.post("/daily-standup")
+async def cron_daily_standup(request: Request):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    if not _authorized(request):
+        raise HTTPException(401, "unauthorized")
+    from routers.post_job import _send_standup_to_all
+    asyncio.create_task(_send_standup_to_all())
+    return {"accepted": True}
