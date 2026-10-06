@@ -10,6 +10,8 @@ from models_phase2 import (
 from security import require_tenant_user
 from ai_receptionist import receptionist_reply
 from routers.usage import record_usage, usage_capped
+from routers.knowledge_docs import retrieve_relevant_chunks
+from routers.ai_quality import scan_conversation
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
@@ -191,6 +193,11 @@ async def end_conversation(conv_id: str, user: dict = Depends(require_tenant_use
     msgs = await db.conv_messages.find({"conversation_id": conv_id}, {"_id": 0}).sort("created_at", 1).to_list(200)
     summary = conv.get("summary") or " ".join([m["content"] for m in msgs[-6:] if m["role"] == "caller"])[:300]
     await db.conversations.update_one({"id": conv_id}, {"$set": {"status": "completed", "ended_at": _now_iso(), "summary": summary}})
+    # Fire-and-forget quality scan
+    try:
+        await scan_conversation(user["tenant_id"], conv_id)
+    except Exception:
+        pass
     return {"status": "ok"}
 
 

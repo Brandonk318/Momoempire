@@ -61,6 +61,23 @@ def clear_auth_cookies(response):
 
 async def get_current_user(request: Request) -> dict:
     db = get_db()
+    # 1) Try Emergent Google session cookie first
+    session_token = request.cookies.get("session_token")
+    if session_token:
+        sess = await db.user_sessions.find_one({"session_token": session_token})
+        if sess:
+            exp = sess.get("expires_at")
+            if isinstance(exp, str):
+                try: exp = datetime.fromisoformat(exp)
+                except Exception: exp = None
+            if exp and exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if exp and exp >= datetime.now(timezone.utc):
+                user = await db.users.find_one({"id": sess["user_id"]}, {"_id": 0, "password_hash": 0})
+                if user:
+                    return user
+
+    # 2) Fallback to JWT access cookie / Authorization bearer
     token = request.cookies.get("access_token")
     if not token:
         auth = request.headers.get("Authorization", "")

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import { Toaster } from "@/components/ui/sonner";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -18,6 +18,7 @@ import PaymentCancel from "@/pages/PaymentCancel";
 import CustomerPortalPublic from "@/pages/CustomerPortalPublic";
 import InviteAccept from "@/pages/InviteAccept";
 import ReviewPublic from "@/pages/ReviewPublic";
+import AuthCallback from "@/pages/AuthCallback";
 
 // Dashboard
 import Home from "@/pages/dashboard/Home";
@@ -49,64 +50,77 @@ import AdminIndustries from "@/pages/admin/Industries";
 import AdminCountries from "@/pages/admin/Countries";
 import FeatureFlags from "@/pages/admin/FeatureFlags";
 import SystemHealth from "@/pages/admin/SystemHealth";
+import AdminAIQuality from "@/pages/admin/AIQuality";
 
 const AppShell = ({ children }) => <DashboardLayout>{children}</DashboardLayout>;
 const AdminShell = ({ children }) => <AdminLayout>{children}</AdminLayout>;
 const Protected = ({ children, ...rest }) => <ProtectedRoute {...rest}><AppShell>{children}</AppShell></ProtectedRoute>;
 const AdminGuard = ({ children }) => <ProtectedRoute platformAdmin><AdminShell>{children}</AdminShell></ProtectedRoute>;
 
+// REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+function Router() {
+  const location = useLocation();
+  // Google OAuth returns to /auth/callback#session_id=... — handle before any protected route runs.
+  if (location.hash?.includes("session_id=")) {
+    return <AuthCallback />;
+  }
+  return (
+    <Routes>
+      <Route path="/" element={<Landing />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
+      <Route path="/b/:slug" element={<PublicBusiness />} />
+      <Route path="/portal/:slug" element={<CustomerPortalPublic />} />
+      <Route path="/invite" element={<InviteAccept />} />
+      <Route path="/reviews/:token" element={<ReviewPublic />} />
+      <Route path="/payment/success" element={<PaymentSuccess />} />
+      <Route path="/payment/cancel" element={<PaymentCancel />} />
+
+      <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+
+      <Route path="/app" element={<Protected><Home /></Protected>} />
+      <Route path="/app/ai-employee" element={<Protected><AIEmployee /></Protected>} />
+      <Route path="/app/calls" element={<Protected><Calls /></Protected>} />
+      <Route path="/app/messages" element={<Protected><Messages /></Protected>} />
+      <Route path="/app/leads" element={<Protected><Leads /></Protected>} />
+      <Route path="/app/customers" element={<Protected><Customers /></Protected>} />
+      <Route path="/app/appointments" element={<Protected><Appointments /></Protected>} />
+      <Route path="/app/services" element={<Protected><ServicesPage /></Protected>} />
+      <Route path="/app/payments" element={<Protected><Payments /></Protected>} />
+      <Route path="/app/website" element={<Protected><Website /></Protected>} />
+      <Route path="/app/customer-portal" element={<Protected><CustomerPortal /></Protected>} />
+      <Route path="/app/reviews" element={<Protected><Reviews /></Protected>} />
+      <Route path="/app/analytics" element={<Protected><Analytics /></Protected>} />
+      <Route path="/app/advisor" element={<Protected><BusinessAdvisor /></Protected>} />
+      <Route path="/app/knowledge" element={<Protected><KnowledgeBase /></Protected>} />
+      <Route path="/app/automations" element={<Protected><Automations /></Protected>} />
+      <Route path="/app/integrations" element={<Protected><Integrations /></Protected>} />
+      <Route path="/app/phone-numbers" element={<Protected><PhoneNumbers /></Protected>} />
+      <Route path="/app/usage" element={<Protected><Usage /></Protected>} />
+      <Route path="/app/billing" element={<Protected><Billing /></Protected>} />
+      <Route path="/app/settings" element={<Protected><Settings /></Protected>} />
+
+      <Route path="/admin" element={<AdminGuard><AdminOverview /></AdminGuard>} />
+      <Route path="/admin/tenants" element={<AdminGuard><AdminTenants /></AdminGuard>} />
+      <Route path="/admin/industries" element={<AdminGuard><AdminIndustries /></AdminGuard>} />
+      <Route path="/admin/countries" element={<AdminGuard><AdminCountries /></AdminGuard>} />
+      <Route path="/admin/feature-flags" element={<AdminGuard><FeatureFlags /></AdminGuard>} />
+      <Route path="/admin/health" element={<AdminGuard><SystemHealth /></AdminGuard>} />
+      <Route path="/admin/ai-quality" element={<AdminGuard><AdminAIQuality /></AdminGuard>} />
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/b/:slug" element={<PublicBusiness />} />
-          <Route path="/portal/:slug" element={<CustomerPortalPublic />} />
-          <Route path="/invite" element={<InviteAccept />} />
-          <Route path="/reviews/:token" element={<ReviewPublic />} />
-          <Route path="/payment/success" element={<PaymentSuccess />} />
-          <Route path="/payment/cancel" element={<PaymentCancel />} />
-
-          <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
-
-          {/* Dashboard */}
-          <Route path="/app" element={<Protected><Home /></Protected>} />
-          <Route path="/app/ai-employee" element={<Protected><AIEmployee /></Protected>} />
-          <Route path="/app/calls" element={<Protected><Calls /></Protected>} />
-          <Route path="/app/messages" element={<Protected><Messages /></Protected>} />
-          <Route path="/app/leads" element={<Protected><Leads /></Protected>} />
-          <Route path="/app/customers" element={<Protected><Customers /></Protected>} />
-          <Route path="/app/appointments" element={<Protected><Appointments /></Protected>} />
-          <Route path="/app/services" element={<Protected><ServicesPage /></Protected>} />
-          <Route path="/app/payments" element={<Protected><Payments /></Protected>} />
-          <Route path="/app/website" element={<Protected><Website /></Protected>} />
-          <Route path="/app/customer-portal" element={<Protected><CustomerPortal /></Protected>} />
-          <Route path="/app/reviews" element={<Protected><Reviews /></Protected>} />
-          <Route path="/app/analytics" element={<Protected><Analytics /></Protected>} />
-          <Route path="/app/advisor" element={<Protected><BusinessAdvisor /></Protected>} />
-          <Route path="/app/knowledge" element={<Protected><KnowledgeBase /></Protected>} />
-          <Route path="/app/automations" element={<Protected><Automations /></Protected>} />
-          <Route path="/app/integrations" element={<Protected><Integrations /></Protected>} />
-          <Route path="/app/phone-numbers" element={<Protected><PhoneNumbers /></Protected>} />
-          <Route path="/app/usage" element={<Protected><Usage /></Protected>} />
-          <Route path="/app/billing" element={<Protected><Billing /></Protected>} />
-          <Route path="/app/settings" element={<Protected><Settings /></Protected>} />
-
-          {/* Admin */}
-          <Route path="/admin" element={<AdminGuard><AdminOverview /></AdminGuard>} />
-          <Route path="/admin/tenants" element={<AdminGuard><AdminTenants /></AdminGuard>} />
-          <Route path="/admin/industries" element={<AdminGuard><AdminIndustries /></AdminGuard>} />
-          <Route path="/admin/countries" element={<AdminGuard><AdminCountries /></AdminGuard>} />
-          <Route path="/admin/feature-flags" element={<AdminGuard><FeatureFlags /></AdminGuard>} />
-          <Route path="/admin/health" element={<AdminGuard><SystemHealth /></AdminGuard>} />
-
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Router />
       </BrowserRouter>
       <Toaster position="top-right" richColors />
     </AuthProvider>

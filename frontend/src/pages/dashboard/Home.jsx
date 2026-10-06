@@ -21,10 +21,12 @@ export default function Home() {
   const { user } = useAuth();
   const [sum, setSum] = useState(null);
   const [tenant, setTenant] = useState(null);
+  const [opps, setOpps] = useState([]);
 
   useEffect(() => {
     api.get("/tenants/summary").then((r) => setSum(r.data)).catch(() => {});
     api.get("/tenants/me").then((r) => setTenant(r.data)).catch(() => {});
+    api.get("/tenants/pipeline/opportunities").then((r) => setOpps(r.data.items || [])).catch(() => {});
   }, []);
 
   return (
@@ -82,6 +84,30 @@ export default function Home() {
           </ul>
         </div>
       </div>
+
+      {opps.length > 0 && (
+        <div className="mt-8 surface p-6" data-testid="home-opportunities">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="overline">Proactive opportunities</div>
+              <div className="font-display text-xl mt-1">{opps.length} things to act on today</div>
+            </div>
+            <Link to="/app/analytics"><Button variant="outline" size="sm" data-testid="home-opp-all-btn">See all</Button></Link>
+          </div>
+          <ul className="divide-y divide-border">
+            {opps.slice(0, 5).map((o, i) => (
+              <li key={i} className="py-2.5 flex items-center gap-3" data-testid={`home-opp-${i}`}>
+                <span className={`h-2 w-2 rounded-full ${o.severity === 'high' ? 'bg-rose-500' : o.severity === 'medium' ? 'bg-amber-500' : 'bg-slate-400'}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{o.title}</div>
+                  <div className="text-[11px] text-muted-foreground truncate">{o.detail}</div>
+                </div>
+                <Badge variant="outline" className="text-[10px]">{o.kind.replace(/_/g, " ")}</Badge>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

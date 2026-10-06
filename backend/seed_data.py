@@ -197,7 +197,7 @@ DEFAULT_FLAGS = [
 
 async def seed_admin():
     db = get_db()
-    email = os.environ.get("ADMIN_EMAIL", "admin@aioffice.io").lower()
+    email = os.environ.get("ADMIN_EMAIL", "ramonajefferson10@gmail.com").lower()
     pwd = os.environ.get("ADMIN_PASSWORD", "AdminPass123!")
     existing = await db.users.find_one({"email": email})
     if existing is None:
@@ -281,6 +281,17 @@ async def ensure_indexes():
     await db.usage_events.create_index([("tenant_id", 1), ("metric", 1), ("period_key", 1)])
     await db.portal_tokens.create_index("token", unique=True)
     await db.portal_tokens.create_index("expires_at", expireAfterSeconds=0)
+    # Phase 3
+    await db.appointment_types.create_index([("tenant_id", 1)])
+    await db.schedule_staff.create_index([("tenant_id", 1)])
+    await db.knowledge_docs.create_index([("tenant_id", 1), ("created_at", -1)])
+    await db.knowledge_chunks.create_index([("tenant_id", 1), ("doc_id", 1)])
+    await db.automation_rules.create_index([("tenant_id", 1)])
+    await db.quality_flags.create_index([("tenant_id", 1), ("status", 1), ("created_at", -1)])
+    await db.quality_flags.create_index([("tenant_id", 1), ("conversation_id", 1), ("issue_type", 1)], unique=True)
+    await db.industry_briefs.create_index([("tenant_id", 1), ("created_at", -1)])
+    await db.user_sessions.create_index("session_token", unique=True)
+    await db.user_sessions.create_index("user_id")
 
 
 async def run_all_seeds():

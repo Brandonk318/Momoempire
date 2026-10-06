@@ -35,6 +35,8 @@ export default function Calls() {
   const [sending, setSending] = useState(false);
   const [simOpen, setSimOpen] = useState(false);
   const [simForm, setSimForm] = useState({ caller_name: "", caller_phone: "" });
+  const [listening, setListening] = useState(false);
+  const recRef = useRef(null);
   const endRef = useRef(null);
 
   const load = () => api.get("/conversations", { params: { channel: "call" } }).then((r) => setList(r.data));
@@ -95,6 +97,21 @@ export default function Calls() {
     } catch (e) { toast.error(errMessage(e)); }
   };
 
+  const toggleMic = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { toast.error("Mic unsupported in this browser — type instead"); return; }
+    if (listening) { recRef.current?.stop(); setListening(false); return; }
+    const rec = new SR();
+    rec.lang = "en-US";
+    rec.interimResults = false;
+    rec.onresult = (e) => { const t = e.results[0][0].transcript; setInput((prev) => (prev ? prev + " " : "") + t); };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    rec.start();
+    recRef.current = rec;
+    setListening(true);
+  };
+
   return (
     <div data-testid="calls-page">
       <PageHeader
@@ -152,7 +169,10 @@ export default function Calls() {
                 <div ref={endRef} />
               </div>
               <div className="border-t border-border p-3 flex gap-2">
-                <Input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder={active.status === "active" ? "Type what the caller says…" : "This call has ended"} disabled={active.status !== "active" || sending} data-testid="call-input" />
+                <Button variant={listening ? "default" : "outline"} size="icon" onClick={toggleMic} disabled={active.status !== "active"} data-testid="mic-btn" aria-label="Mic">
+                  <span className={`inline-block h-2 w-2 rounded-full ${listening ? "bg-rose-500 animate-pulse" : "bg-foreground"}`} />
+                </Button>
+                <Input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder={active.status === "active" ? (listening ? "Listening…" : "Type what the caller says…") : "This call has ended"} disabled={active.status !== "active" || sending} data-testid="call-input" />
                 <Button className="btn-tenant" onClick={send} disabled={active.status !== "active" || sending || !input.trim()} data-testid="call-send-btn"><Send className="h-4 w-4" /></Button>
               </div>
             </>

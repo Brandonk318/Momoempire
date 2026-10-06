@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { errMessage } from "@/lib/api";
+import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -51,6 +52,10 @@ export default function Login() {
           <h1 className="font-display text-3xl tracking-tight mt-8">Welcome back</h1>
           <p className="text-muted-foreground text-sm mt-1">Log in to your workspace.</p>
           <form onSubmit={submit} className="mt-8 space-y-4" data-testid="login-form">
+            <GoogleSignInButton label="Continue with Google" testId="login-google-btn" />
+            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+              <span className="flex-1 h-px bg-border" />OR<span className="flex-1 h-px bg-border" />
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} data-testid="login-email-input" />

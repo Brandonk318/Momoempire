@@ -28,6 +28,12 @@ from routers.integrations import router as integrations_router
 from routers.automations import router as automations_router
 from routers.portal import router as portal_router
 from routers.usage import router as usage_router
+from routers.scheduling import router as scheduling_router
+from routers.pipeline import router as pipeline_router
+from routers.knowledge_docs import router as knowledge_docs_router
+from routers.ai_quality import router as quality_router, admin_router as quality_admin_router
+from routers.automation_rules import router as automation_rules_router
+from routers.industry_intel import router as industry_intel_router
 
 app = FastAPI(title="AI Office Platform API")
 api = APIRouter(prefix="/api")
@@ -72,6 +78,13 @@ api.include_router(integrations_router)
 api.include_router(automations_router)
 api.include_router(portal_router)
 api.include_router(usage_router)
+api.include_router(scheduling_router)
+api.include_router(pipeline_router)
+api.include_router(knowledge_docs_router)
+api.include_router(quality_router)
+api.include_router(quality_admin_router)
+api.include_router(automation_rules_router)
+api.include_router(industry_intel_router)
 # Stripe is registered to deliver webhooks to /api/stripe/webhook (top-level).
 api.add_api_route("/stripe/webhook", _stripe_wh, methods=["POST"], include_in_schema=False)
 

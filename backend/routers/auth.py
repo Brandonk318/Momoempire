@@ -118,7 +118,12 @@ async def login(data: LoginIn, request: Request, response: Response):
 
 
 @router.post("/logout")
-async def logout(response: Response, _: dict = Depends(get_current_user)):
+async def logout(request: Request, response: Response, _: dict = Depends(get_current_user)):
+    db = get_db()
+    tok = request.cookies.get("session_token")
+    if tok:
+        await db.user_sessions.delete_many({"session_token": tok})
+    response.delete_cookie("session_token", path="/")
     clear_auth_cookies(response)
     return {"status": "ok"}
 
@@ -184,3 +189,80 @@ async def reset_password(data: ResetIn):
                               {"$set": {"password_hash": hash_password(data.new_password)}})
     await db.password_reset_tokens.update_one({"token": data.token}, {"$set": {"used": True}})
     return {"status": "ok"}
+
+
+# ---------- Emergent Google Auth ----------
+import httpx
+from pydantic import BaseModel
+
+
+class GoogleSessionIn(BaseModel):
+    session_id: str
+
+
+@router.post("/google/session")
+async def google_session(data: GoogleSessionIn, response: Response):
+    """Exchange an Emergent session_id for a session_token cookie.
+    Finds the user by email, or creates a new owner + tenant workspace."""
+    db = get_db()
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as hc:
+            r = await hc.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": data.session_id},
+            )
+            r.raise_for_status()
+            info = r.json()
+    except Exception as e:
+        raise HTTPException(401, f"Session exchange failed: {e}")
+
+    email = (info.get("email") or "").lower()
+    if not email:
+        raise HTTPException(400, "No email on Emergent session")
+    session_token = info.get("session_token") or ""
+    name = info.get("name") or email.split("@")[0]
+    picture = info.get("picture") or ""
+
+    user = await db.users.find_one({"email": email})
+    if not user:
+        # New Google user → bootstrap a tenant workspace
+        from models import Tenant
+        slug_base = email.split("@")[0].lower().replace(".", "-")[:40] or f"biz-{_uuid()[:6]}"
+        slug = slug_base
+        n = 1
+        while await db.tenants.find_one({"slug": slug}):
+            n += 1; slug = f"{slug_base}-{n}"
+        tenant = Tenant(
+            name=f"{name}'s business", slug=slug,
+            branding={"display_name": name, "primary_color": "#0A0A0A", "accent_color": "#2563EB", "logo_url": picture},
+            ai_employee={"name": "Alex", "personality": "Warm, professional, concise.", "voice": "neutral",
+                         "greeting": f"Hi, thanks for calling! How can I help?", "enabled": True},
+        )
+        await db.tenants.insert_one(dict(tenant.model_dump()))
+        user_id = _uuid()
+        await db.users.insert_one({
+            "id": user_id, "email": email, "password_hash": "", "name": name,
+            "role": "owner", "tenant_id": tenant.id, "email_verified": True,
+            "mfa_enabled": False, "picture": picture, "created_at": _now_iso(),
+        })
+        user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    else:
+        # Keep profile fresh
+        patch = {"name": name}
+        if picture: patch["picture"] = picture
+        if not user.get("email_verified"): patch["email_verified"] = True
+        await db.users.update_one({"email": email}, {"$set": patch})
+        user = await db.users.find_one({"email": email}, {"_id": 0, "password_hash": 0})
+
+    expires = datetime.now(timezone.utc) + timedelta(days=7)
+    await db.user_sessions.insert_one({
+        "id": _uuid(), "user_id": user["id"], "session_token": session_token,
+        "expires_at": expires, "created_at": _now_iso(),
+    })
+    response.set_cookie("session_token", session_token, httponly=True, secure=True,
+                        samesite="none", max_age=7 * 86400, path="/")
+    # Also mint our JWT cookies so existing code paths keep working
+    access = create_access_token(user["id"], email, user["role"], user.get("tenant_id"))
+    refresh = create_refresh_token(user["id"])
+    set_auth_cookies(response, access, refresh)
+    return user

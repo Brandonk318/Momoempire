@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { errMessage } from "@/lib/api";
+import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 export default function Signup() {
   const [name, setName] = useState("");
@@ -50,6 +51,10 @@ export default function Signup() {
           <h1 className="font-display text-3xl tracking-tight mt-8">Create your account</h1>
           <p className="text-muted-foreground text-sm mt-1">You'll become the owner of a brand new workspace.</p>
           <form onSubmit={submit} className="mt-8 space-y-4" data-testid="signup-form">
+            <GoogleSignInButton label="Sign up with Google" testId="signup-google-btn" />
+            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+              <span className="flex-1 h-px bg-border" />OR<span className="flex-1 h-px bg-border" />
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="name">Your name</Label>
               <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} data-testid="signup-name-input" />
