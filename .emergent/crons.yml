@@ -1,0 +1,15 @@
+crons:
+  - name: followups-dispatch
+    description: "Dispatch scheduled follow-up SMS/emails whose send_at is due"
+    cron: "*/15 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/followups"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
+  - name: overage-nightly
+    description: "Compute and charge per-tenant overage every night at 02:30 UTC"
+    cron: "30 2 * * *"
+    endpoint: "{{BASE_URL}}/api/cron/overage-nightly"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true

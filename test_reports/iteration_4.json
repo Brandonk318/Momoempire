@@ -1,0 +1,47 @@
+{
+  "summary": "Phase 5 full-stack testing (backend + frontend) complete. 23/23 backend pytest cases PASSED (test_phase5.py) covering: public /api/plans; admin plan Stripe price_id persistence (PUT /api/admin/plans/{key}); POST /api/payments/checkout fallback (price_data path returns checkout_url + session_id); public /api/public/invitations/accept-google signature (rejects bogus session with 401, requires token+session_id → 422); admin /api/admin/source/manifest + /zip (zip starts with PK, >2KB, 403 for non-admin on both routes); admin /api/admin/overage/preview + /run?dry_run=true + tenant /api/usage/overage; sales intel upsells CRUD + /suggest matching & non-matching; end-to-end conversation flow: start→caller-turn('water heater leaking at 123 Main Street, need help today, budget 500')→end auto-scores lead to hot/warm and auto-schedules 3 follow-ups; explicit /sales/conversations/{id}/score returns {score:{label,score,reason}}; /extract returns fields with address containing '123 Main' and urgency='high'; /apply-fields updates lead; /sales/followups default cadence has 3 steps, PUT custom 2-step cadence persists; cancel + run-due both succeed. Frontend playwright: /pricing renders all 4 plan cards + CTAs; admin login → /admin shows download-source-btn + overage-preview + overage-preview-btn; admin plans edit modal shows plan-stripe-price-{key} input and saving renders 'stripe:' badge on card; new tenant → /app/sales-intel renders tabs scored/upsells/followups without errors and upsell-add/save creates an upsell-card-*; Calls page after end-of-call: score-call-btn + extract-fields-btn visible, extract shows extracted-panel with address/urgency/service, apply-fields-btn triggers 'CRM updated' toast; InviteAccept with valid token renders invite-google-btn alongside invite-accept-btn and clicking invite-google-btn navigates to auth.emergentagent.com with proper redirect.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/plans + GET /api/admin/plans", "issue": "Both 'enterprise' (price_cents=0, custom) and 'trial' plans are seeded with is_public=True (model default). /pricing frontend filters them client-side, but the public endpoint still exposes them. Set is_public=False on trial + enterprise in DEFAULT_PLANS."},
+      {"endpoint": "PUT /api/admin/plans/{key}", "issue": "Uses full PlanIn body — allows 'key' field in payload (path key wins, body key is applied via $set). Low-risk but inconsistent. Also no mongo _id handling conflict since insert uses model_dump."},
+      {"endpoint": "POST /api/payments/checkout", "issue": "When plan.stripe_price_id is set to a fake value like 'price_test_123', Stripe test mode will reject the request → 500. Admin UI accepts any string so a mis-paste bricks checkout for that plan. Consider a format sanity check (price_* prefix) or a 'test ping' button in the admin modal."},
+      {"endpoint": "GET /api/admin/plans/costs/current (noted in iter3)", "issue": "Still returns {'costs':{},'updated_at':null} with no 'id' when no config — asymmetric shape."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin /admin/plans", "issues": ["Trial plan card and Enterprise plan card both show the 'public' badge — same backend minor noted above. Enterprise card has no Edit button (only shows a different Edit? actually it does) but no price shown. Minor cosmetic."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase5.py",
+    "/app/test_reports/pytest/phase5_results.xml"
+  ],
+  "action_items": [
+    "Set is_public=False on 'enterprise' and 'trial' plans in DEFAULT_PLANS so /api/plans and /api/admin/plans/public (and the pricing endpoint) do not leak non-purchasable tiers.",
+    "Optional: validate stripe_price_id shape (price_*) on PUT /api/admin/plans/{key} to prevent fake IDs from bricking checkout.",
+    "Optional (from iter3, still open): normalize /api/admin/plans/costs/current response shape when no config exists."
+  ],
+  "critical_code_review_comments": [
+    "overage.py:_charge_overage_to_stripe silently swallows exceptions into last_error — good, but there's no retry/backoff loop; one Stripe outage will mark rows as 'not charged' indefinitely until manually re-run.",
+    "source_export.py builds the zip synchronously in memory on every GET /admin/source/zip. On a hot path this is OK (~a few MB) but it's blocking the event loop; consider offloading to a thread executor or caching the zip by git commit SHA.",
+    "sales_intel.py:_schedule_followups_for_lead uses step_index as idempotency key so re-ending a call will NOT re-schedule — good. But a cadence shrink (e.g. 3→2 steps) leaves the stale step_index=2 scheduled job orphaned.",
+    "conversations.py:end_conversation runs the insight pipeline synchronously (score + schedule) and swallows all exceptions. For long transcripts this adds ~1-5s to the response. Consider BackgroundTasks.",
+    "invitations.py:accept-google sets both access_token/refresh_token (JWT) AND a session_token cookie — overlapping auth state. The /auth/me resolver will prefer session_token; if the JWT path is used downstream (e.g., /auth/switch) the two can drift. Pick one path per invite acceptance.",
+    "ai_insights.py: ADDRESS_RE requires a street suffix (Street/St/Ave/...). 'My water heater is leaking at 123 Main' alone would NOT match — we only got the match because the fixture text included 'Street'. Add a looser fallback.",
+    "plans.py: public_router.get('') exposes is_public plans but ALSO leaks admin-managed fields like overage rates & stripe_price_id to the public — frontend should not care, but it's a minor info leak."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase5.py"
+  ],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "100% (all 20+ UI assertions passed)"},
+  "test_credentials": "Admin: ramonajefferson10@gmail.com / AdminPass123! (seeded). Each run registers 2 fresh TEST_phase5* tenants + 1 TEST_ui* tenant + 1 TEST_calls* tenant + 1 TEST_inv* tenant with onboarding (plumbing industry).",
+  "seed_data_creation": "Per run: ~5 TEST_* tenants (plumbing, onboarded) + 1 test upsell per tenant + 1 scored conversation + ~3 scheduled follow-up jobs on hot leads. Starter plan's stripe_price_id is temporarily set to 'price_test_123' then restored to '' before checkout test. UI run also writes 'price_test_ui_abc' onto the Trial plan (first Edit button fallback) — safe since trial has no checkout flow, but reset manually if clean baseline needed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All Phase 5 endpoints green. The Calls page end-to-end extraction/apply flow is the single most valuable regression test — reuses conversations.start/turn/end + sales/extract + sales/apply-fields. invite-google-btn uses window.location.href to redirect to https://auth.emergentagent.com/oauth/?redirect=<invite URL>, verified via expect_navigation. For future invite tests, you can create a pending invite via POST /api/tenants/invitations after owner login — the token in the response is the one to put in ?token=.",
+  "rca of the issue": "N/A — all 23 backend tests + all frontend UI assertions passed on first full-stack run."
+}

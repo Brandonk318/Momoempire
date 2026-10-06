@@ -36,7 +36,24 @@ All four phases ship as **one coherent multi-tenant platform**. Adding a new ind
 
 ## P1 backlog
 - Twilio live-call bridge (TwiML → `/caller-turn`) — simulator already runs the exact pipeline.
-- Stripe meter + usage-based billing for ai_minutes overage.
 - OpenAI Realtime WebRTC for live speech-to-speech.
 - Email delivery (Resend) for invites + review requests + reminders.
-- Google Team Invites (accept with Google instead of password).
+- Expert-mode persona depth (receptionist / sales pro / industry expert) on AI employee.
+- Instant-quote estimator grounded in uploaded pricing docs.
+- "Why they called" weekly digest (LLM over conversations).
+
+### Phase 5 — Commerce + Sales Intelligence (Oct 2026) ✅
+**Stripe Price IDs on plans**: `stripe_price_id` on `Plan` (admin UI edit per plan). Checkout uses the real price when set; falls back to ad-hoc `price_data` otherwise.
+**Overage billing (record + charge)**: `routers/overage.py` computes `used - included` × `plan.overage[metric]` for ai_minutes / calls / sms / ai_interactions, persists `overage_items` idempotently per (tenant, period, metric), and creates `stripe.InvoiceItem` on `tenant.stripe_customer_id` when a sub exists. Admin UI: Overview → "Overage this period" with Preview + Record & charge. Tenant: Billing shows an overage card. Cron: `/api/cron/overage-nightly` runs 02:30 UTC.
+**Public /pricing page**: `/pricing` renders live from `GET /api/plans` (stripe_price_id stripped) — marketing updates become no-code.
+**Google team invites**: `POST /api/public/invitations/accept-google` verifies the Google email matches the invited email, attaches the user to the tenant with the invited role, mints JWT + session cookies. InviteAccept UI shows "Accept with Google" alongside password form; the Router preserves `/invite#session_id=...` instead of hijacking to `/auth/callback`.
+**Admin source zip**: `GET /api/admin/source/zip` streams a cleaned-up zip of `/app` (excludes node_modules/.git/.emergent/__pycache__/uploads) and injects `README.DUPLICATE.md` + `.env.example` files. Admin UI: "Download source zip" button on Overview.
+**Sales intelligence**:
+- **Lead scoring** (`ai_insights.score_lead_from_transcript`): hot/warm/cold + score 0-100 + reason + signals. LLM-first (gpt-6-sol), deterministic keyword fallback. Auto-runs on `POST /api/conversations/{id}/end`. Score persists on both conversation + linked lead; new `/api/sales/leads/scored?label=` endpoint; UI shows score badges on Leads kanban and Calls header.
+- **Dynamic upsells**: CRUD `/api/sales/upsells` + `/suggest?service=`; injected into AI receptionist system prompt as `Upsell suggestions` block so the AI mentions one naturally when a matching service comes up.
+- **Smart follow-up cadence**: default 3-step SMS (24h, 72h, 168h), admin-editable per tenant. Hot/warm leads auto-schedule after `/end`. Cron `/api/cron/followups` runs every 15m to dispatch due nudges. UI tab on Sales Intel with cadence editor + upcoming nudges + cancel.
+- **Call → CRM auto-fill**: `ai_insights.extract_crm_fields` extracts address/phone/email/service_requested/urgency/budget_hint/preferred_time/notes_summary (LLM + regex fallback). Calls page shows "Auto-fill CRM" button on ended calls → review panel → one-click "Save to CRM" writes to lead/customer.
+
+### Phase 5 cron contract
+`.emergent/crons.yml` registers `followups-dispatch` (*/15m) + `overage-nightly` (02:30 UTC). Both require `Authorization: Bearer $WEBHOOK_CRON_SECRET` and fire-and-forget via `asyncio.create_task`.
+

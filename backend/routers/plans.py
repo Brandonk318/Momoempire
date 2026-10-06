@@ -122,4 +122,5 @@ public_router = APIRouter(prefix="/plans", tags=["plans-public"])
 @public_router.get("")
 async def public_plans_list():
     db = get_db()
-    return await db.plans.find({"is_public": True}, {"_id": 0}).sort("sort_order", 1).to_list(100)
+    rows = await db.plans.find({"is_public": True}, {"_id": 0, "stripe_price_id": 0}).sort("sort_order", 1).to_list(100)
+    return rows
