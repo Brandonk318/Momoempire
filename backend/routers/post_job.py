@@ -80,6 +80,13 @@ async def run_post_job(tenant_id: str, appt_id: str) -> dict:
             upsert=True,
         )
 
+    # 3b) Schedule a 2-hour review-request SMS (if review_url is set)
+    try:
+        from routers.phase9 import schedule_review_request_2h
+        await schedule_review_request_2h(tenant_id, appt)
+    except Exception as e:
+        logger.warning("review-request-2h schedule failed: %s", e)
+
     # 4) Log a post_job_run record so UI can show history
     await db.post_job_runs.insert_one({
         "id": _uuid(), "tenant_id": tenant_id, "appointment_id": appt_id,

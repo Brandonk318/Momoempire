@@ -276,6 +276,19 @@ async def inbound_sms_sim(data: dict, user: dict = Depends(require_tenant_user))
         thread = thread_doc
     msg_in = ConvMessage(conversation_id=thread["id"], tenant_id=user["tenant_id"], role="caller", content=body)
     await db.conv_messages.insert_one(msg_in.model_dump())
+    # Try the appointment confirmation shortcut first (YES / RESCHEDULE / CANCEL)
+    try:
+        from routers.phase9 import handle_confirmation_reply
+        conf = await handle_confirmation_reply(user["tenant_id"], frm, body)
+    except Exception:
+        conf = None
+    if conf:
+        reply = conf["reply"]
+        action = conf.get("action")
+        msg_out = ConvMessage(conversation_id=thread["id"], tenant_id=user["tenant_id"], role="ai",
+                              content=reply, action=action)
+        await db.conv_messages.insert_one(msg_out.model_dump())
+        return {"thread_id": thread["id"], "reply": reply, "action": action}
     # Reuse receptionist pipeline for a quick auto-reply
     tenant, industry, services, knowledge, upsells, policy, persona, objections = await _tenant_bundle(user["tenant_id"])
     history = await db.conv_messages.find({"conversation_id": thread["id"]}, {"_id": 0}).sort("created_at", 1).to_list(50)

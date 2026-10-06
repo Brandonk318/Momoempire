@@ -134,3 +134,23 @@ async def cron_daily_standup(request: Request):
     from routers.post_job import _send_standup_to_all
     asyncio.create_task(_send_standup_to_all())
     return {"accepted": True}
+
+
+@router.post("/callbacks-due")
+async def cron_callbacks_due(request: Request):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    if not _authorized(request):
+        raise HTTPException(401, "unauthorized")
+    from routers.phase9 import _run_due_callbacks
+    asyncio.create_task(_run_due_callbacks())
+    return {"accepted": True}
+
+
+@router.post("/appt-confirmations")
+async def cron_appt_confirmations(request: Request):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    if not _authorized(request):
+        raise HTTPException(401, "unauthorized")
+    from routers.phase9 import _run_appt_confirmations
+    asyncio.create_task(_run_appt_confirmations())
+    return {"accepted": True}

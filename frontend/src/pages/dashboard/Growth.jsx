@@ -8,7 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Mail, Rocket, Gift, Copy, PlayCircle, Sparkles, MessageSquareText, Sunrise, Share2 } from "lucide-react";
+import { Mail, Rocket, Gift, Copy, PlayCircle, Sparkles, MessageSquareText, Sunrise, Share2, Phone, MapPin, CalendarPlus } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 function DigestTab() {
   const [d, setD] = useState(null);
@@ -191,7 +192,7 @@ function ReferralsTab() {
 export default function Growth() {
   return (
     <div data-testid="growth-page">
-      <PageHeader eyebrow="Growth" title="Grow revenue" description="Weekly digest, win-back campaigns, referrals, and more — on autopilot." />
+      <PageHeader eyebrow="Growth" title="Grow revenue" description="Autopilot features: digest, win-back, referrals, post-job, reviews, standup, social, callbacks + heatmap." />
       <Tabs defaultValue="digest">
         <TabsList>
           <TabsTrigger value="digest" data-testid="growth-tab-digest">Weekly digest</TabsTrigger>
@@ -201,6 +202,8 @@ export default function Growth() {
           <TabsTrigger value="reviews" data-testid="growth-tab-reviews">Review replies</TabsTrigger>
           <TabsTrigger value="standup" data-testid="growth-tab-standup">Standup</TabsTrigger>
           <TabsTrigger value="social" data-testid="growth-tab-social">Social draft</TabsTrigger>
+          <TabsTrigger value="callbacks" data-testid="growth-tab-callbacks">Callbacks</TabsTrigger>
+          <TabsTrigger value="heatmap" data-testid="growth-tab-heatmap">Heatmap</TabsTrigger>
         </TabsList>
         <TabsContent value="digest"><DigestTab /></TabsContent>
         <TabsContent value="winback"><WinbackTab /></TabsContent>
@@ -209,7 +212,146 @@ export default function Growth() {
         <TabsContent value="reviews"><ReviewReplyTab /></TabsContent>
         <TabsContent value="standup"><StandupTab /></TabsContent>
         <TabsContent value="social"><SocialDraftTab /></TabsContent>
+        <TabsContent value="callbacks"><CallbacksTab /></TabsContent>
+        <TabsContent value="heatmap"><HeatmapTab /></TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function CallbacksTab() {
+  const [list, setList] = useState([]);
+  const [form, setForm] = useState({ phone: "", name: "", call_at: "", note: "" });
+  const load = () => api.get("/growth/callbacks").then((r) => setList(r.data));
+  useEffect(() => { load(); }, []);
+  const save = async () => {
+    try {
+      const iso = new Date(form.call_at).toISOString();
+      await api.post("/growth/callbacks", { ...form, call_at: iso });
+      setForm({ phone: "", name: "", call_at: "", note: "" }); load();
+      toast.success("Callback scheduled — the AI will dial when it's time");
+    } catch (e) { toast.error(errMessage(e)); }
+  };
+  const cancel = async (id) => { try { await api.post(`/growth/callbacks/${id}/cancel`); load(); } catch (e) { toast.error(errMessage(e)); } };
+  return (
+    <div className="grid grid-cols-12 gap-5" data-testid="callbacks-tab">
+      <div className="col-span-12 lg:col-span-5 surface p-6 space-y-3">
+        <div className="overline"><Phone className="h-3.5 w-3.5 inline mr-1" />Schedule an AI call-back</div>
+        <div className="grid grid-cols-2 gap-3">
+          <Input placeholder="Phone (+1…)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="cb-phone" />
+          <Input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="cb-name" />
+        </div>
+        <Input type="datetime-local" value={form.call_at} onChange={(e) => setForm({ ...form, call_at: e.target.value })} data-testid="cb-when" />
+        <Textarea rows={2} placeholder="Context for the AI (e.g. 'quoted $450 for AC install, said he'd think about it')" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} data-testid="cb-note" />
+        <Button className="btn-tenant" onClick={save} disabled={!form.phone || !form.call_at} data-testid="cb-save-btn"><Phone className="h-4 w-4 mr-1" />Schedule call-back</Button>
+      </div>
+      <div className="col-span-12 lg:col-span-7 surface p-6">
+        <div className="overline mb-3">Queue</div>
+        <ul className="divide-y divide-border">
+          {list.map((c) => (
+            <li key={c.id} className="py-3 flex items-center gap-3" data-testid={`cb-${c.id}`}>
+              <Badge variant={c.status === "sent" ? "default" : c.status === "cancelled" ? "secondary" : "outline"}>{c.status}</Badge>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium truncate">{c.name || c.to}</div>
+                <div className="text-[11px] font-mono text-muted-foreground">{c.to} · {new Date(c.send_at).toLocaleString()}</div>
+                {c.note && <div className="text-[12px] italic mt-0.5">"{c.note}"</div>}
+              </div>
+              {c.status === "scheduled" && <Button size="sm" variant="ghost" onClick={() => cancel(c.id)} data-testid={`cb-cancel-${c.id}`}>Cancel</Button>}
+            </li>
+          ))}
+          {list.length === 0 && <li className="py-6 text-sm text-muted-foreground text-center">No callbacks scheduled.</li>}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function HeatmapTab() {
+  const [data, setData] = useState(null);
+  const [days, setDays] = useState(90);
+  useEffect(() => { api.get("/growth/heatmap", { params: { days } }).then((r) => setData(r.data)); }, [days]);
+  if (!data) return <div className="text-sm text-muted-foreground">Loading…</div>;
+  const chartData = data.rows.map((r) => ({ label: r.label, leads: r.leads, customers: r.customers }));
+  const withGeo = data.rows.filter((r) => r.lat && r.lon);
+  // Normalize for mini svg map: find bbox
+  let bbox = null;
+  if (withGeo.length) {
+    const lats = withGeo.map((r) => r.lat), lons = withGeo.map((r) => r.lon);
+    bbox = { minLat: Math.min(...lats), maxLat: Math.max(...lats), minLon: Math.min(...lons), maxLon: Math.max(...lons) };
+    const dLat = Math.max(0.01, bbox.maxLat - bbox.minLat);
+    const dLon = Math.max(0.01, bbox.maxLon - bbox.minLon);
+    bbox.minLat -= dLat * 0.1; bbox.maxLat += dLat * 0.1;
+    bbox.minLon -= dLon * 0.1; bbox.maxLon += dLon * 0.1;
+  }
+  const project = (lat, lon) => {
+    if (!bbox) return { x: 0, y: 0 };
+    const x = ((lon - bbox.minLon) / (bbox.maxLon - bbox.minLon)) * 100;
+    const y = ((bbox.maxLat - lat) / (bbox.maxLat - bbox.minLat)) * 100;
+    return { x, y };
+  };
+  return (
+    <div className="space-y-5" data-testid="heatmap-tab">
+      <div className="surface p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="overline"><MapPin className="h-3.5 w-3.5 inline mr-1" />Service area · last {days} days</div>
+            <div className="font-display text-2xl mt-1">{data.totals.regions} regions · {data.totals.leads_total} leads · {data.totals.customers_total} customers</div>
+          </div>
+          <div className="flex gap-2">
+            {[30, 90, 365].map((d) => (
+              <Button key={d} size="sm" variant={days === d ? "default" : "outline"} onClick={() => setDays(d)} data-testid={`heatmap-range-${d}`}>{d}d</Button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-12 gap-5">
+        <div className="col-span-12 lg:col-span-7 surface p-6">
+          <div className="overline mb-3">Top ZIPs / cities</div>
+          {chartData.length === 0 ? (
+            <div className="py-10 text-sm text-muted-foreground text-center">No addresses yet. The heatmap learns from your leads' addresses.</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={chartData}>
+                <XAxis dataKey="label" fontSize={11} />
+                <YAxis fontSize={11} allowDecimals={false} />
+                <Tooltip />
+                <Bar dataKey="leads" fill="#0A0A0A" />
+                <Bar dataKey="customers" fill="#059669" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+        <div className="col-span-12 lg:col-span-5 surface p-6">
+          <div className="overline mb-3">Pin map</div>
+          {withGeo.length === 0 ? (
+            <div className="py-10 text-sm text-muted-foreground text-center">Pins appear when leads include a US ZIP code in their address.</div>
+          ) : (
+            <div className="relative w-full h-[300px] bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg overflow-hidden border border-border" data-testid="heatmap-pins">
+              {withGeo.map((r) => {
+                const { x, y } = project(r.lat, r.lon);
+                const total = r.leads + r.customers;
+                const size = Math.max(10, Math.min(40, 10 + total * 4));
+                return (
+                  <div key={r.label} className="absolute rounded-full bg-rose-500/60 border-2 border-rose-700" style={{
+                    left: `calc(${x}% - ${size / 2}px)`, top: `calc(${y}% - ${size / 2}px)`, width: size, height: size,
+                  }} title={`${r.label} · ${total}`} data-testid={`heatmap-pin-${r.label}`}>
+                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-mono bg-white/80 rounded px-1">{r.label}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <ul className="mt-4 text-sm space-y-1">
+            {data.rows.slice(0, 5).map((r) => (
+              <li key={r.label} className="flex justify-between" data-testid={`heatmap-row-${r.label}`}>
+                <span className="font-mono">{r.label}</span>
+                <span className="text-muted-foreground">{r.leads + r.customers}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }
@@ -318,7 +460,15 @@ function StandupTab() {
       <div className="col-span-12 lg:col-span-5 surface p-6">
         <div className="overline">Send me the standup</div>
         <p className="text-sm text-muted-foreground mt-2">We auto-send this to your workspace contact phone + email every morning. Tap below for an instant one.</p>
-        <Button className="btn-tenant mt-4" onClick={send} disabled={sending} data-testid="standup-send-btn"><Sunrise className="h-4 w-4 mr-1" />{sending ? "Sending…" : "Send to me now"}</Button>
+        <div className="flex gap-2 mt-4 flex-wrap">
+          <Button className="btn-tenant" onClick={send} disabled={sending} data-testid="standup-send-btn"><Sunrise className="h-4 w-4 mr-1" />{sending ? "Sending…" : "Send to me now"}</Button>
+          <Button variant="outline" asChild data-testid="standup-ics-btn">
+            <a href={`${process.env.REACT_APP_BACKEND_URL}/api/growth/standup/today.ics`} download>
+              <CalendarPlus className="h-4 w-4 mr-1" />Add to Calendar
+            </a>
+          </Button>
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-3">Downloads a <code>.ics</code> file. Double-click to open in Google Calendar / Apple Calendar / Outlook.</p>
       </div>
     </div>
   );

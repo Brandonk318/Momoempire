@@ -27,6 +27,20 @@ crons:
     method: POST
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
     enabled: true
+  - name: callbacks-due
+    description: "Dispatch scheduled AI call-backs when their time arrives"
+    cron: "*/5 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/callbacks-due"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
+  - name: appt-confirmations
+    description: "Send 24h-before confirmation SMS asking YES / RESCHEDULE"
+    cron: "25 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/appt-confirmations"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
   - name: daily-standup
     description: "7am local-ish SMS/email standup to owners: today's agenda + hot leads"
     cron: "0 13 * * *"

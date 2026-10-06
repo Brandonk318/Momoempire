@@ -6,7 +6,7 @@ from db import get_db
 from models import _uuid, _now_iso
 from models_phase2 import Conversation, ConvMessage
 from ai_receptionist import receptionist_reply
-from services.twilio import twiml_voice_response, twiml_say_and_gather
+from services.twilio import twiml_voice_response, twiml_say_and_gather, send_sms
 from routers.usage import record_usage, usage_capped
 
 router = APIRouter(prefix="/twilio", tags=["twilio-webhook"])
@@ -103,6 +103,16 @@ async def sms_incoming(request: Request):
     tenant = await _resolve_tenant(to_num)
     if not tenant:
         return Response('<?xml version="1.0" encoding="UTF-8"?><Response/>', media_type="application/xml")
+    # Try confirmation shortcut first (YES / RESCHEDULE / CANCEL)
+    try:
+        from routers.phase9 import handle_confirmation_reply
+        conf = await handle_confirmation_reply(tenant["id"], from_num, body)
+    except Exception as e:
+        print(f"[sms confirm reply] {e}"); conf = None
+    if conf:
+        reply = conf["reply"][:1500]
+        twiml = f'<?xml version="1.0" encoding="UTF-8"?><Response><Message>{reply}</Message></Response>'
+        return Response(twiml, media_type="application/xml")
     db = get_db()
     thread = await db.conversations.find_one({"tenant_id": tenant["id"], "channel": "sms", "caller_phone": from_num})
     if not thread:
@@ -131,6 +141,34 @@ async def sms_incoming(request: Request):
     return Response(twiml, media_type="application/xml")
 
 
+@router.post("/outbound-callback", include_in_schema=False)
+async def outbound_callback(request: Request):
+    """TwiML endpoint invoked by Twilio when our scheduled callback actually dials.
+    Starts a fresh AI conversation and routes further turns through /voice-turn."""
+    form = await request.form()
+    tenant_id = request.query_params.get("tenant_id") or form.get("tenant_id") or ""
+    name = request.query_params.get("name") or ""
+    note = request.query_params.get("note") or ""
+    call_sid = form.get("CallSid") or ""
+    db = get_db()
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0}) or {}
+    conv = Conversation(tenant_id=tenant_id, channel="call", caller_phone=form.get("To", ""),
+                        caller_name=name or "", is_simulation=False)
+    doc = conv.model_dump()
+    doc["twilio_call_sid"] = call_sid
+    doc["direction"] = "outbound"
+    await db.conversations.insert_one(doc)
+    greeting = (f"Hi {name}, this is the AI office for {tenant.get('name','us')}. "
+               f"Thanks for your interest. {note}. How can I help?") if name else \
+               f"Hi, this is {tenant.get('name','us')}. Just following up on your inquiry. How can I help?"
+    await db.conv_messages.insert_one(ConvMessage(conversation_id=doc["id"], tenant_id=tenant_id,
+                                                 role="ai", content=greeting).model_dump())
+    base = _public_base_url()
+    gather_url = f"{base}/api/twilio/voice-turn?conv_id={doc['id']}"
+    return Response(twiml_voice_response(tenant_name=tenant.get("name",""), gather_url=gather_url, greeting=greeting),
+                   media_type="application/xml")
+
+
 @router.post("/missed-call", include_in_schema=False)
 async def missed_call(request: Request):
     """Status-callback webhook — if a call ended as no-answer/failed, send the automation textback."""
@@ -148,7 +186,24 @@ async def missed_call(request: Request):
     if not autom.get("missed_call_textback", True):
         return {"ignored": True}
     msg = autom.get("missed_call_textback_message") or "Sorry we missed you! Reply here and we'll get right back to you."
-    from services.twilio import send_sms
+    res = await send_sms(tenant_id=tenant["id"], to=from_num, body=msg)
+    await record_usage(tenant["id"], "sms", 1, {"missed_call": True, "to": from_num})
+    return {"status": status, "textback": res}
+    """Status-callback webhook — if a call ended as no-answer/failed, send the automation textback."""
+    form = await request.form()
+    status = form.get("CallStatus") or ""
+    from_num = form.get("From") or ""
+    to_num = form.get("To") or ""
+    if status not in {"no-answer", "busy", "failed", "canceled"}:
+        return {"ignored": True}
+    tenant = await _resolve_tenant(to_num)
+    if not tenant or not from_num:
+        return {"ignored": True}
+    db = get_db()
+    autom = await db.automation_settings.find_one({"tenant_id": tenant["id"]}, {"_id": 0}) or {}
+    if not autom.get("missed_call_textback", True):
+        return {"ignored": True}
+    msg = autom.get("missed_call_textback_message") or "Sorry we missed you! Reply here and we'll get right back to you."
     res = await send_sms(tenant_id=tenant["id"], to=from_num, body=msg)
     await record_usage(tenant["id"], "sms", 1, {"missed_call": True, "to": from_num})
     return {"status": status, "textback": res}

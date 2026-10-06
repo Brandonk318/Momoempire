@@ -48,6 +48,7 @@ from routers.sales_extra import router as sales_extra_router, realtime as realti
 from routers.sales_expert import router as sales_expert_router
 from routers.widget import router as widget_router
 from routers.post_job import router as post_job_router
+from routers.phase9 import router as phase9_router
 
 app = FastAPI(title="AI Office Platform API")
 api = APIRouter(prefix="/api")
@@ -118,6 +119,7 @@ api.include_router(realtime_router)
 api.include_router(sales_expert_router)
 api.include_router(widget_router)
 api.include_router(post_job_router)
+api.include_router(phase9_router)
 # Stripe is registered to deliver webhooks to /api/stripe/webhook (top-level).
 api.add_api_route("/stripe/webhook", _stripe_wh, methods=["POST"], include_in_schema=False)
 

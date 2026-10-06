@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { Plus, Phone } from "lucide-react";
 import { LeadScoreBadge } from "./SalesIntel";
 
 const STATUSES = ["new", "contacted", "qualified", "won", "lost"];
@@ -68,6 +68,19 @@ export default function Leads() {
                     {STATUSES.filter((s) => s !== l.status).map((s) => (
                       <button key={s} onClick={() => move(l, s)} className={`text-[10px] px-2 py-0.5 rounded-full ${COLORS[s]} hover:opacity-80`} data-testid={`lead-move-${l.id}-${s}`}>→ {s}</button>
                     ))}
+                    {l.phone && (
+                      <button onClick={async () => {
+                        const when = window.prompt("Call back at (YYYY-MM-DD HH:mm, local time)", "");
+                        if (!when) return;
+                        try {
+                          const iso = new Date(when).toISOString();
+                          await api.post("/growth/callbacks", { lead_id: l.id, phone: l.phone, name: l.name, call_at: iso, note: l.notes || "" });
+                          toast.success("Callback scheduled");
+                        } catch (e) { toast.error(errMessage(e)); }
+                      }} className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-900 hover:opacity-80 inline-flex items-center gap-1" data-testid={`lead-callback-${l.id}`}>
+                        <Phone className="h-3 w-3" />schedule call
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
