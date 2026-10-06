@@ -45,9 +45,17 @@ async def onboard_tenant(data: TenantOnboardingIn, user: dict = Depends(require_
     industry = await db.industries.find_one({"slug": data.industry_slug}, {"_id": 0})
     if not industry:
         raise HTTPException(400, "Unknown industry")
+
+    market_code = (data.address.country or "US").upper().strip()
+    market = await db.countries.find_one({"code": market_code, "enabled": True}, {"_id": 0})
+    if not market:
+        raise HTTPException(400, "Country is not enabled for this platform")
+
     # Build tenant document from wizard input + industry defaults
     patch = data.model_dump()
     patch["address"] = data.address.model_dump() if hasattr(data.address, "model_dump") else dict(data.address)
+    patch["address"]["country"] = market_code
+    patch["country"] = market_code
     patch["hours"] = data.hours.model_dump() if hasattr(data.hours, "model_dump") else dict(data.hours)
     patch["onboarding_complete"] = True
     patch["updated_at"] = _now_iso()
