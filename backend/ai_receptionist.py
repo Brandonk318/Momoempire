@@ -44,7 +44,8 @@ def _bullet_list(items: List[Any], max_items: int = 20) -> str:
 
 
 def build_system_prompt(tenant: dict, industry: dict | None, services: list, knowledge: list,
-                        in_hours: bool, usage_capped: bool, upsells: list | None = None) -> str:
+                        in_hours: bool, usage_capped: bool, upsells: list | None = None,
+                        discount_policy: dict | None = None) -> str:
     ai = tenant.get("ai_employee") or {}
     name = ai.get("name") or "Alex"
     personality = ai.get("personality") or "Warm, professional, concise."
@@ -79,6 +80,20 @@ def build_system_prompt(tenant: dict, industry: dict | None, services: list, kno
             pitch = u.get("pitch") or u.get("description") or u.get("name") or ""
             lines.append(f"- {u.get('name')} — triggers on: {triggers} — say: \"{pitch}\"")
         upsell_block = "\n".join(lines)
+
+    discount_block = ""
+    if discount_policy and discount_policy.get("enabled"):
+        max_abs = (discount_policy.get("max_absolute_cents", 0) or 0) / 100
+        max_pct = discount_policy.get("max_percent_off", 0) or 0
+        phrase = (discount_policy.get("phrase") or "").strip()
+        conditions = (discount_policy.get("conditions") or "").strip()
+        discount_block = (
+            f"Discount guardrail (BEAT-THE-QUOTE policy):\n"
+            f"- Only offer a discount when: {conditions or 'customer explicitly mentions a competing quote'}\n"
+            f"- Hard caps: at most {max_pct}% off and at most ${max_abs:.0f} off a job\n"
+            f"- Script: {phrase or 'I can offer a one-time discount if we book today.'}\n"
+            f"- Only ever offer ONCE per call. Log it in the booking notes."
+        )
 
     hours_block = ""
     if tenant.get("hours"):
@@ -147,6 +162,8 @@ Knowledge base:
 Upsell suggestions (offer naturally when the caller books or asks about a matching service — do NOT be pushy, mention at most one):
 {upsell_block or '(none configured)'}
 
+{discount_block or ''}
+
 {chr(10).join(ind_bits)}
 
 {tools_doc}
@@ -179,10 +196,12 @@ def parse_ai_response(text: str) -> Dict[str, Any]:
 
 async def receptionist_reply(tenant: dict, industry: dict | None, services: list,
                              knowledge: list, history: list, caller_utterance: str,
-                             usage_capped: bool = False, upsells: list | None = None) -> Dict[str, Any]:
+                             usage_capped: bool = False, upsells: list | None = None,
+                             discount_policy: dict | None = None) -> Dict[str, Any]:
     """Core receptionist loop — returns {reply, action, end}."""
     in_hours = is_within_hours(tenant.get("hours") or {})
-    system = build_system_prompt(tenant, industry, services, knowledge, in_hours, usage_capped, upsells=upsells)
+    system = build_system_prompt(tenant, industry, services, knowledge, in_hours, usage_capped,
+                                 upsells=upsells, discount_policy=discount_policy)
 
     key = os.environ.get("EMERGENT_LLM_KEY")
     try:

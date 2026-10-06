@@ -16,7 +16,7 @@ from routers.ai_quality import scan_conversation
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 
-async def _tenant_bundle(tenant_id: str) -> tuple[dict, Optional[dict], list, list, list]:
+async def _tenant_bundle(tenant_id: str) -> tuple[dict, Optional[dict], list, list, list, Optional[dict]]:
     db = get_db()
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
     if not tenant:
@@ -27,7 +27,8 @@ async def _tenant_bundle(tenant_id: str) -> tuple[dict, Optional[dict], list, li
     services = await db.services.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(200)
     knowledge = await db.knowledge.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(200)
     upsells = await db.upsells.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(100)
-    return tenant, industry, services, knowledge, upsells
+    policy = await db.discount_policies.find_one({"tenant_id": tenant_id}, {"_id": 0})
+    return tenant, industry, services, knowledge, upsells, policy
 
 
 async def _ensure_customer_or_lead(tenant_id: str, name: str, phone: str, email: str = "") -> dict:
@@ -74,7 +75,7 @@ async def get_conversation(conv_id: str, user: dict = Depends(require_tenant_use
 @router.post("/start")
 async def start_conversation(data: ConversationIn, user: dict = Depends(require_tenant_user)):
     db = get_db()
-    tenant, _, _, _, _ = await _tenant_bundle(user["tenant_id"])
+    tenant, _, _, _, _, _ = await _tenant_bundle(user["tenant_id"])
     conv = Conversation(
         tenant_id=user["tenant_id"],
         **data.model_dump(),
@@ -106,13 +107,14 @@ async def caller_turn(conv_id: str, data: ConvMessageIn, user: dict = Depends(re
     await db.conv_messages.insert_one(caller_msg.model_dump())
 
     # Load context
-    tenant, industry, services, knowledge, upsells = await _tenant_bundle(user["tenant_id"])
+    tenant, industry, services, knowledge, upsells, policy = await _tenant_bundle(user["tenant_id"])
     history = await db.conv_messages.find(
         {"conversation_id": conv_id}, {"_id": 0}
     ).sort("created_at", 1).to_list(50)
 
     capped = await usage_capped(user["tenant_id"], "ai_interactions")
-    ai = await receptionist_reply(tenant, industry, services, knowledge, history, data.text, usage_capped=capped, upsells=upsells)
+    ai = await receptionist_reply(tenant, industry, services, knowledge, history, data.text,
+                                  usage_capped=capped, upsells=upsells, discount_policy=policy)
 
     # Execute structured action (idempotent, side-effect side)
     action = ai.get("action") or None
@@ -272,9 +274,9 @@ async def inbound_sms_sim(data: dict, user: dict = Depends(require_tenant_user))
     msg_in = ConvMessage(conversation_id=thread["id"], tenant_id=user["tenant_id"], role="caller", content=body)
     await db.conv_messages.insert_one(msg_in.model_dump())
     # Reuse receptionist pipeline for a quick auto-reply
-    tenant, industry, services, knowledge, upsells = await _tenant_bundle(user["tenant_id"])
+    tenant, industry, services, knowledge, upsells, policy = await _tenant_bundle(user["tenant_id"])
     history = await db.conv_messages.find({"conversation_id": thread["id"]}, {"_id": 0}).sort("created_at", 1).to_list(50)
-    ai = await receptionist_reply(tenant, industry, services, knowledge, history, body, upsells=upsells)
+    ai = await receptionist_reply(tenant, industry, services, knowledge, history, body, upsells=upsells, discount_policy=policy)
     reply = ai.get("reply", "Thanks — we'll be right back with you.")
     out = ConvMessage(conversation_id=thread["id"], tenant_id=user["tenant_id"], role="ai", content=reply, action=ai.get("action") or None)
     await db.conv_messages.insert_one(out.model_dump())

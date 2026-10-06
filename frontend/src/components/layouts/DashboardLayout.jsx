@@ -5,7 +5,7 @@ import {
   Home, Bot, PhoneCall, MessageSquare, Target, Users, CalendarClock,
   Wrench, CreditCard, Globe, UserRound, Star, LineChart, Compass,
   BookOpenText, Workflow, Plug, PhoneForwarded, Gauge, Receipt, Settings,
-  LogOut, ShieldCheck,
+  LogOut, ShieldCheck, Rocket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -46,6 +46,7 @@ const GROUPS = [
       { to: "/app/analytics", icon: LineChart, label: "Analytics", testId: "nav-analytics" },
       { to: "/app/advisor", icon: Compass, label: "Business Advisor", testId: "nav-advisor" },
       { to: "/app/sales-intel", icon: Target, label: "Sales Intel", testId: "nav-sales-intel" },
+      { to: "/app/growth", icon: Rocket, label: "Growth", testId: "nav-growth" },
       { to: "/app/knowledge", icon: BookOpenText, label: "Knowledge Base", testId: "nav-knowledge" },
     ],
   },

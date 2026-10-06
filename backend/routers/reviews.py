@@ -1,4 +1,5 @@
 """Review Autopilot — tenant sends requests, customers respond via public link."""
+import os
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -6,6 +7,8 @@ from db import get_db
 from models_phase2 import ReviewRequest, ReviewRequestIn
 from security import require_tenant_user
 from routers.usage import record_usage
+from services.email import send_email, review_request_html
+from services.twilio import send_sms
 
 router = APIRouter(prefix="/tenants/reviews", tags=["reviews"])
 
@@ -23,12 +26,23 @@ async def create_review_request(data: ReviewRequestIn, user: dict = Depends(requ
     doc = rr.model_dump()
     await db.review_requests.insert_one(doc)
     doc.pop("_id", None)
-    # In demo mode we log the message that would be sent via SMS/email
     channel = data.channel
-    msg = data.message or f"Hi {data.customer_name}, thanks for choosing us! Could you share a quick review? Link below."
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "name": 1, "review_url": 1}) or {}
+    biz = tenant.get("name", "us")
+    frontend = os.environ.get("FRONTEND_URL") or ""
+    review_url = tenant.get("review_url") or (f"{frontend.rstrip('/')}/reviews/{doc['public_token']}" if frontend else f"/reviews/{doc['public_token']}")
+    msg = data.message or f"Hi {data.customer_name}, thanks for choosing {biz}! Could you share a quick review? {review_url}"
+    try:
+        if channel == "sms" and data.customer_phone:
+            res = await send_sms(tenant_id=user["tenant_id"], to=data.customer_phone, body=msg)
+            await record_usage(user["tenant_id"], "sms", 1, {"review_request_id": doc["id"], "twilio_status": res.get("status")})
+        elif channel == "email" and data.customer_email:
+            html = review_request_html(business=biz, review_url=review_url, customer_name=data.customer_name)
+            await send_email(to=data.customer_email, subject=f"Quick favor from {biz}?",
+                            html=html, from_name=biz)
+    except Exception as e:
+        print(f"[REVIEW-REQ send error] {e}")
     print(f"[REVIEW-REQ {channel}->{data.customer_phone or data.customer_email}] {msg} (token={doc['public_token']})")
-    if channel == "sms":
-        await record_usage(user["tenant_id"], "sms", 1, {"review_request_id": doc["id"]})
     return doc
 
 

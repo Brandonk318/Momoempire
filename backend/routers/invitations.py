@@ -1,4 +1,5 @@
 """Team invitations (token-based)."""
+import os
 from fastapi import APIRouter, HTTPException, Depends, Response
 from datetime import datetime, timezone, timedelta
 from db import get_db
@@ -30,6 +31,19 @@ async def create_invite(data: InvitationIn, user: dict = Depends(require_tenant_
     await db.invitations.insert_one(doc)
     doc.pop("_id", None)
     print(f"[INVITE] {email} invited to tenant {user['tenant_id']} role={data.role} token={doc['token']}")
+    # Fire-and-forget email send
+    try:
+        from services.email import send_email, invite_html
+        tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "name": 1})
+        frontend = os.environ.get("FRONTEND_URL") or ""
+        accept_url = f"{frontend.rstrip('/')}/invite?token={doc['token']}" if frontend else f"/invite?token={doc['token']}"
+        html = invite_html(inviter=user.get("name") or user.get("email") or "Your teammate",
+                          business=(tenant or {}).get("name", "the team"),
+                          role=data.role, accept_url=accept_url)
+        await send_email(to=email, subject=f"You're invited to {(tenant or {}).get('name','the team')}",
+                        html=html, from_name=(tenant or {}).get("name"))
+    except Exception as e:
+        print(f"[INVITE email] failed: {e}")
     return doc
 
 

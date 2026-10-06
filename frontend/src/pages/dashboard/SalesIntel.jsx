@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Flame, Snowflake, ThermometerSun, Plus, Trash2, Pencil, Clock, PlayCircle } from "lucide-react";
+import { Flame, Snowflake, ThermometerSun, Plus, Trash2, Pencil, Clock, PlayCircle, Scissors } from "lucide-react";
 
 const LABEL_COLOR = {
   hot: "bg-rose-100 text-rose-900",
@@ -223,17 +223,66 @@ function FollowupsTab() {
 export default function SalesIntel() {
   return (
     <div data-testid="sales-intel-page">
-      <PageHeader eyebrow="Intelligence" title="Sales intelligence" description="Scored leads, upsell library, and your follow-up cadence." />
+      <PageHeader eyebrow="Intelligence" title="Sales intelligence" description="Scored leads, upsell library, follow-up cadence, and beat-the-quote guardrails." />
       <Tabs defaultValue="scored">
         <TabsList>
           <TabsTrigger value="scored" data-testid="sales-tab-scored">Hot / warm / cold</TabsTrigger>
           <TabsTrigger value="upsells" data-testid="sales-tab-upsells">Upsells</TabsTrigger>
           <TabsTrigger value="followups" data-testid="sales-tab-followups">Follow-ups</TabsTrigger>
+          <TabsTrigger value="discount" data-testid="sales-tab-discount">Beat the quote</TabsTrigger>
         </TabsList>
         <TabsContent value="scored"><ScoredLeadsTab /></TabsContent>
         <TabsContent value="upsells"><UpsellsTab /></TabsContent>
         <TabsContent value="followups"><FollowupsTab /></TabsContent>
+        <TabsContent value="discount"><DiscountTab /></TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function DiscountTab() {
+  const [p, setP] = useState(null);
+  const load = () => api.get("/sales/discount-policy").then((r) => setP(r.data));
+  useEffect(() => { load(); }, []);
+  const save = async () => {
+    try {
+      await api.put("/sales/discount-policy", {
+        enabled: !!p.enabled,
+        max_percent_off: Number(p.max_percent_off) || 0,
+        max_absolute_cents: Number(p.max_absolute_cents) || 0,
+        phrase: p.phrase || "",
+        conditions: p.conditions || "",
+      });
+      toast.success("Discount policy saved — AI will respect these limits.");
+    } catch (e) { toast.error(errMessage(e)); }
+  };
+  if (!p) return <div className="text-sm text-muted-foreground">Loading…</div>;
+  return (
+    <div className="surface p-6 max-w-2xl space-y-4" data-testid="discount-tab">
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={!!p.enabled} onChange={(e) => setP({ ...p, enabled: e.target.checked })} data-testid="discount-enabled" />
+        <Scissors className="h-4 w-4" /> Allow the AI to offer a one-time discount
+      </label>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label>Max % off</Label>
+          <Input type="number" value={p.max_percent_off} onChange={(e) => setP({ ...p, max_percent_off: e.target.value })} data-testid="discount-max-pct" />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Max $ off (cents)</Label>
+          <Input type="number" value={p.max_absolute_cents} onChange={(e) => setP({ ...p, max_absolute_cents: e.target.value })} data-testid="discount-max-cents" />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label>AI script</Label>
+        <Textarea rows={2} value={p.phrase} onChange={(e) => setP({ ...p, phrase: e.target.value })} data-testid="discount-phrase" />
+        <p className="text-[11px] text-muted-foreground">Placeholder: {`{amount}`} — the AI will substitute a dollar amount within your caps.</p>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Only offer when</Label>
+        <Input value={p.conditions} onChange={(e) => setP({ ...p, conditions: e.target.value })} data-testid="discount-conditions" />
+      </div>
+      <Button className="btn-tenant" onClick={save} data-testid="discount-save">Save guardrails</Button>
     </div>
   );
 }
