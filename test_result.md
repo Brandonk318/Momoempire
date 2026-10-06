@@ -171,3 +171,30 @@
 ## agent_communication:
   - agent: "main"
     message: "Market expansion work is isolated on empire-market-expansion. Validate enabled-only country listing, owner country switching, rejection of disabled/unknown codes, persistence on GET /tenants/me, and dashboard dropdown behavior before merge."
+
+
+## backend:
+  - task: "Market-aware onboarding"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/tenants.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Onboarding now validates address.country against enabled markets, normalizes the country code, and stores it both in tenant.country and tenant.address.country."
+
+## frontend:
+  - task: "Onboarding country selector"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/Onboarding.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Onboarding now loads enabled markets and lets the business select its country instead of silently defaulting every new tenant to the U.S."
