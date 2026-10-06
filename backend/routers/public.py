@@ -1,6 +1,7 @@
 """Public (unauthenticated) tenant profile pages + health."""
 from fastapi import APIRouter, HTTPException
 from db import get_db
+from niche_profiles import get_niche_office_profile
 
 router = APIRouter(prefix="/public", tags=["public"])
 
@@ -20,6 +21,7 @@ async def public_business(slug: str):
         "name": t.get("name"),
         "description": t.get("description"),
         "industry_slug": t.get("industry_slug"),
+        "office_profile": get_niche_office_profile(t.get("industry_slug")),
         "address": {k: v for k, v in (t.get("address") or {}).items() if k in {"city", "state", "country"}},
         "service_areas": t.get("service_areas", []),
         "hours": t.get("hours", {}),
