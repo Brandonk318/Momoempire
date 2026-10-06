@@ -15,11 +15,14 @@ import Onboarding from "@/pages/Onboarding";
 import PublicBusiness from "@/pages/PublicBusiness";
 import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
+import CustomerPortalPublic from "@/pages/CustomerPortalPublic";
+import InviteAccept from "@/pages/InviteAccept";
+import ReviewPublic from "@/pages/ReviewPublic";
 
 // Dashboard
 import Home from "@/pages/dashboard/Home";
 import AIEmployee from "@/pages/dashboard/AIEmployee";
-import Services from "@/pages/dashboard/Services";
+import ServicesPage from "@/pages/dashboard/Services";
 import Customers from "@/pages/dashboard/Customers";
 import Leads from "@/pages/dashboard/Leads";
 import Appointments from "@/pages/dashboard/Appointments";
@@ -29,10 +32,15 @@ import Analytics from "@/pages/dashboard/Analytics";
 import Billing from "@/pages/dashboard/Billing";
 import Usage from "@/pages/dashboard/Usage";
 import Settings from "@/pages/dashboard/Settings";
-import {
-  Calls, Messages, Payments, Website, CustomerPortal, Reviews,
-  Automations, Integrations, PhoneNumbers,
-} from "@/pages/dashboard/Stubs";
+import Calls from "@/pages/dashboard/Calls";
+import Messages from "@/pages/dashboard/Messages";
+import Reviews from "@/pages/dashboard/Reviews";
+import Payments from "@/pages/dashboard/Payments";
+import Website from "@/pages/dashboard/Website";
+import CustomerPortal from "@/pages/dashboard/CustomerPortal";
+import PhoneNumbers from "@/pages/dashboard/PhoneNumbers";
+import Integrations from "@/pages/dashboard/Integrations";
+import Automations from "@/pages/dashboard/Automations";
 
 // Admin
 import AdminOverview from "@/pages/admin/Overview";
@@ -44,6 +52,8 @@ import SystemHealth from "@/pages/admin/SystemHealth";
 
 const AppShell = ({ children }) => <DashboardLayout>{children}</DashboardLayout>;
 const AdminShell = ({ children }) => <AdminLayout>{children}</AdminLayout>;
+const Protected = ({ children, ...rest }) => <ProtectedRoute {...rest}><AppShell>{children}</AppShell></ProtectedRoute>;
+const AdminGuard = ({ children }) => <ProtectedRoute platformAdmin><AdminShell>{children}</AdminShell></ProtectedRoute>;
 
 function App() {
   return (
@@ -56,41 +66,44 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/b/:slug" element={<PublicBusiness />} />
+          <Route path="/portal/:slug" element={<CustomerPortalPublic />} />
+          <Route path="/invite" element={<InviteAccept />} />
+          <Route path="/reviews/:token" element={<ReviewPublic />} />
           <Route path="/payment/success" element={<PaymentSuccess />} />
           <Route path="/payment/cancel" element={<PaymentCancel />} />
 
           <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
           {/* Dashboard */}
-          <Route path="/app" element={<ProtectedRoute><AppShell><Home /></AppShell></ProtectedRoute>} />
-          <Route path="/app/ai-employee" element={<ProtectedRoute><AppShell><AIEmployee /></AppShell></ProtectedRoute>} />
-          <Route path="/app/calls" element={<ProtectedRoute><AppShell><Calls /></AppShell></ProtectedRoute>} />
-          <Route path="/app/messages" element={<ProtectedRoute><AppShell><Messages /></AppShell></ProtectedRoute>} />
-          <Route path="/app/leads" element={<ProtectedRoute><AppShell><Leads /></AppShell></ProtectedRoute>} />
-          <Route path="/app/customers" element={<ProtectedRoute><AppShell><Customers /></AppShell></ProtectedRoute>} />
-          <Route path="/app/appointments" element={<ProtectedRoute><AppShell><Appointments /></AppShell></ProtectedRoute>} />
-          <Route path="/app/services" element={<ProtectedRoute><AppShell><Services /></AppShell></ProtectedRoute>} />
-          <Route path="/app/payments" element={<ProtectedRoute><AppShell><Payments /></AppShell></ProtectedRoute>} />
-          <Route path="/app/website" element={<ProtectedRoute><AppShell><Website /></AppShell></ProtectedRoute>} />
-          <Route path="/app/customer-portal" element={<ProtectedRoute><AppShell><CustomerPortal /></AppShell></ProtectedRoute>} />
-          <Route path="/app/reviews" element={<ProtectedRoute><AppShell><Reviews /></AppShell></ProtectedRoute>} />
-          <Route path="/app/analytics" element={<ProtectedRoute><AppShell><Analytics /></AppShell></ProtectedRoute>} />
-          <Route path="/app/advisor" element={<ProtectedRoute><AppShell><BusinessAdvisor /></AppShell></ProtectedRoute>} />
-          <Route path="/app/knowledge" element={<ProtectedRoute><AppShell><KnowledgeBase /></AppShell></ProtectedRoute>} />
-          <Route path="/app/automations" element={<ProtectedRoute><AppShell><Automations /></AppShell></ProtectedRoute>} />
-          <Route path="/app/integrations" element={<ProtectedRoute><AppShell><Integrations /></AppShell></ProtectedRoute>} />
-          <Route path="/app/phone-numbers" element={<ProtectedRoute><AppShell><PhoneNumbers /></AppShell></ProtectedRoute>} />
-          <Route path="/app/usage" element={<ProtectedRoute><AppShell><Usage /></AppShell></ProtectedRoute>} />
-          <Route path="/app/billing" element={<ProtectedRoute><AppShell><Billing /></AppShell></ProtectedRoute>} />
-          <Route path="/app/settings" element={<ProtectedRoute><AppShell><Settings /></AppShell></ProtectedRoute>} />
+          <Route path="/app" element={<Protected><Home /></Protected>} />
+          <Route path="/app/ai-employee" element={<Protected><AIEmployee /></Protected>} />
+          <Route path="/app/calls" element={<Protected><Calls /></Protected>} />
+          <Route path="/app/messages" element={<Protected><Messages /></Protected>} />
+          <Route path="/app/leads" element={<Protected><Leads /></Protected>} />
+          <Route path="/app/customers" element={<Protected><Customers /></Protected>} />
+          <Route path="/app/appointments" element={<Protected><Appointments /></Protected>} />
+          <Route path="/app/services" element={<Protected><ServicesPage /></Protected>} />
+          <Route path="/app/payments" element={<Protected><Payments /></Protected>} />
+          <Route path="/app/website" element={<Protected><Website /></Protected>} />
+          <Route path="/app/customer-portal" element={<Protected><CustomerPortal /></Protected>} />
+          <Route path="/app/reviews" element={<Protected><Reviews /></Protected>} />
+          <Route path="/app/analytics" element={<Protected><Analytics /></Protected>} />
+          <Route path="/app/advisor" element={<Protected><BusinessAdvisor /></Protected>} />
+          <Route path="/app/knowledge" element={<Protected><KnowledgeBase /></Protected>} />
+          <Route path="/app/automations" element={<Protected><Automations /></Protected>} />
+          <Route path="/app/integrations" element={<Protected><Integrations /></Protected>} />
+          <Route path="/app/phone-numbers" element={<Protected><PhoneNumbers /></Protected>} />
+          <Route path="/app/usage" element={<Protected><Usage /></Protected>} />
+          <Route path="/app/billing" element={<Protected><Billing /></Protected>} />
+          <Route path="/app/settings" element={<Protected><Settings /></Protected>} />
 
           {/* Admin */}
-          <Route path="/admin" element={<ProtectedRoute platformAdmin><AdminShell><AdminOverview /></AdminShell></ProtectedRoute>} />
-          <Route path="/admin/tenants" element={<ProtectedRoute platformAdmin><AdminShell><AdminTenants /></AdminShell></ProtectedRoute>} />
-          <Route path="/admin/industries" element={<ProtectedRoute platformAdmin><AdminShell><AdminIndustries /></AdminShell></ProtectedRoute>} />
-          <Route path="/admin/countries" element={<ProtectedRoute platformAdmin><AdminShell><AdminCountries /></AdminShell></ProtectedRoute>} />
-          <Route path="/admin/feature-flags" element={<ProtectedRoute platformAdmin><AdminShell><FeatureFlags /></AdminShell></ProtectedRoute>} />
-          <Route path="/admin/health" element={<ProtectedRoute platformAdmin><AdminShell><SystemHealth /></AdminShell></ProtectedRoute>} />
+          <Route path="/admin" element={<AdminGuard><AdminOverview /></AdminGuard>} />
+          <Route path="/admin/tenants" element={<AdminGuard><AdminTenants /></AdminGuard>} />
+          <Route path="/admin/industries" element={<AdminGuard><AdminIndustries /></AdminGuard>} />
+          <Route path="/admin/countries" element={<AdminGuard><AdminCountries /></AdminGuard>} />
+          <Route path="/admin/feature-flags" element={<AdminGuard><FeatureFlags /></AdminGuard>} />
+          <Route path="/admin/health" element={<AdminGuard><SystemHealth /></AdminGuard>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

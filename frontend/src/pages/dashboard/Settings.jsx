@@ -5,8 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Copy, ExternalLink } from "lucide-react";
+import { Copy, ExternalLink, Mail, Trash2, UserPlus } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const PRESET_COLORS = ["#0A0A0A", "#2563EB", "#059669", "#DC2626", "#7C3AED", "#D97706", "#0F766E", "#DB2777"];
@@ -14,12 +17,19 @@ const PRESET_COLORS = ["#0A0A0A", "#2563EB", "#059669", "#DC2626", "#7C3AED", "#
 export default function Settings() {
   const [tenant, setTenant] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [staff, setStaff] = useState([]);
+  const [invites, setInvites] = useState([]);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ email: "", role: "staff" });
 
-  useEffect(() => {
+  const load = () => {
     api.get("/tenants/me").then((r) => setTenant(r.data));
-  }, []);
-
+    api.get("/tenants/invitations/staff").then((r) => setStaff(r.data)).catch(() => {});
+    api.get("/tenants/invitations").then((r) => setInvites(r.data)).catch(() => {});
+  };
+  useEffect(() => { load(); }, []);
   if (!tenant) return null;
+
   const branding = tenant.branding || {};
   const setBranding = (patch) => setTenant({ ...tenant, branding: { ...branding, ...patch } });
 
@@ -27,67 +37,151 @@ export default function Settings() {
     setSaving(true);
     try {
       await api.put("/tenants/me", {
-        name: tenant.name, description: tenant.description, contact_phone: tenant.contact_phone,
-        contact_email: tenant.contact_email || null, website: tenant.website,
-        branding: tenant.branding,
+        name: tenant.name, description: tenant.description,
+        contact_phone: tenant.contact_phone, contact_email: tenant.contact_email || null,
+        website: tenant.website, branding: tenant.branding,
       });
       toast.success("Workspace saved");
     } catch (e) { toast.error(errMessage(e)); }
     finally { setSaving(false); }
   };
 
+  const sendInvite = async () => {
+    try {
+      const { data } = await api.post("/tenants/invitations", inviteForm);
+      toast.success("Invite created — copy the link for the invitee");
+      navigator.clipboard.writeText(`${window.location.origin}/invite?token=${data.token}`);
+      setInviteOpen(false); setInviteForm({ email: "", role: "staff" }); load();
+    } catch (e) { toast.error(errMessage(e)); }
+  };
+  const revokeInvite = async (id) => { try { await api.post(`/tenants/invitations/${id}/revoke`); load(); } catch (e) { toast.error(errMessage(e)); } };
+  const copyInvite = (inv) => { navigator.clipboard.writeText(`${window.location.origin}/invite?token=${inv.token}`); toast.success("Invite link copied"); };
+  const changeRole = async (u, role) => { try { await api.put(`/tenants/invitations/staff/${u.id}/role`, null, { params: { role } }); load(); } catch (e) { toast.error(errMessage(e)); } };
+
   const publicUrl = `${window.location.origin}/b/${tenant.slug}`;
 
   return (
     <div data-testid="settings-page">
-      <PageHeader eyebrow="Setup" title="Workspace settings" description="Branding, contact info, and your public page." actions={
+      <PageHeader eyebrow="Setup" title="Workspace settings" description="Branding, team, and your public page." actions={
         <Button className="btn-tenant" onClick={save} disabled={saving} data-testid="settings-save-btn">{saving ? "Saving…" : "Save changes"}</Button>
       } />
 
-      <div className="grid grid-cols-12 gap-6">
-        <section className="col-span-12 lg:col-span-7 surface p-7 space-y-5">
-          <div className="overline">Business</div>
-          <div className="space-y-1.5"><Label>Business name</Label><Input value={tenant.name || ""} onChange={(e) => setTenant({ ...tenant, name: e.target.value })} data-testid="settings-name-input" /></div>
-          <div className="space-y-1.5"><Label>Description</Label><Textarea rows={3} value={tenant.description || ""} onChange={(e) => setTenant({ ...tenant, description: e.target.value })} data-testid="settings-description-input" /></div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5"><Label>Phone</Label><Input value={tenant.contact_phone || ""} onChange={(e) => setTenant({ ...tenant, contact_phone: e.target.value })} data-testid="settings-phone-input" /></div>
-            <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={tenant.contact_email || ""} onChange={(e) => setTenant({ ...tenant, contact_email: e.target.value })} data-testid="settings-email-input" /></div>
-          </div>
-          <div className="space-y-1.5"><Label>Website</Label><Input value={tenant.website || ""} onChange={(e) => setTenant({ ...tenant, website: e.target.value })} placeholder="https://" data-testid="settings-website-input" /></div>
-        </section>
+      <Tabs defaultValue="profile">
+        <TabsList>
+          <TabsTrigger value="profile" data-testid="settings-tab-profile">Profile</TabsTrigger>
+          <TabsTrigger value="branding" data-testid="settings-tab-branding">Branding</TabsTrigger>
+          <TabsTrigger value="team" data-testid="settings-tab-team">Team</TabsTrigger>
+          <TabsTrigger value="public" data-testid="settings-tab-public">Public page</TabsTrigger>
+        </TabsList>
 
-        <aside className="col-span-12 lg:col-span-5 space-y-6">
-          <div className="surface p-7">
-            <div className="overline mb-3">Branding (face)</div>
-            <div className="space-y-1.5">
-              <Label>Primary color</Label>
-              <div className="flex gap-2 mt-1 flex-wrap">
-                {PRESET_COLORS.map((c) => (
-                  <button type="button" key={c} onClick={() => setBranding({ primary_color: c })} className={`h-9 w-9 rounded-lg border ${branding.primary_color === c ? "ring-2 ring-offset-2 ring-foreground" : "border-border"}`} style={{ background: c }} data-testid={`settings-color-${c.replace("#", "")}`} aria-label={c} />
-                ))}
-              </div>
-              <Input className="mt-3" value={branding.primary_color || "#0A0A0A"} onChange={(e) => setBranding({ primary_color: e.target.value })} data-testid="settings-color-input" />
+        <TabsContent value="profile">
+          <div className="surface p-7 space-y-5 max-w-2xl">
+            <div className="space-y-1.5"><Label>Business name</Label><Input value={tenant.name || ""} onChange={(e) => setTenant({ ...tenant, name: e.target.value })} data-testid="settings-name-input" /></div>
+            <div className="space-y-1.5"><Label>Description</Label><Textarea rows={3} value={tenant.description || ""} onChange={(e) => setTenant({ ...tenant, description: e.target.value })} data-testid="settings-description-input" /></div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5"><Label>Phone</Label><Input value={tenant.contact_phone || ""} onChange={(e) => setTenant({ ...tenant, contact_phone: e.target.value })} data-testid="settings-phone-input" /></div>
+              <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={tenant.contact_email || ""} onChange={(e) => setTenant({ ...tenant, contact_email: e.target.value })} data-testid="settings-email-input" /></div>
             </div>
+            <div className="space-y-1.5"><Label>Website</Label><Input value={tenant.website || ""} onChange={(e) => setTenant({ ...tenant, website: e.target.value })} placeholder="https://" /></div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="branding">
+          <div className="surface p-7 max-w-xl">
+            <div className="overline mb-3">Primary color</div>
+            <div className="flex gap-2 flex-wrap">
+              {PRESET_COLORS.map((c) => (
+                <button type="button" key={c} onClick={() => setBranding({ primary_color: c })} className={`h-10 w-10 rounded-lg border ${branding.primary_color === c ? "ring-2 ring-offset-2 ring-foreground" : "border-border"}`} style={{ background: c }} data-testid={`settings-color-${c.replace("#", "")}`} aria-label={c} />
+              ))}
+            </div>
+            <Input className="mt-3" value={branding.primary_color || "#0A0A0A"} onChange={(e) => setBranding({ primary_color: e.target.value })} />
             <div className="space-y-1.5 mt-5">
               <Label>Display name</Label>
-              <Input value={branding.display_name || ""} onChange={(e) => setBranding({ display_name: e.target.value })} data-testid="settings-display-input" />
+              <Input value={branding.display_name || ""} onChange={(e) => setBranding({ display_name: e.target.value })} />
             </div>
             <div className="space-y-1.5 mt-5">
               <Label>Logo URL</Label>
-              <Input value={branding.logo_url || ""} onChange={(e) => setBranding({ logo_url: e.target.value })} placeholder="https://" data-testid="settings-logo-input" />
+              <Input value={branding.logo_url || ""} onChange={(e) => setBranding({ logo_url: e.target.value })} placeholder="https://" />
             </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="team">
+          <div className="flex justify-end mb-4">
+            <Button className="btn-tenant" onClick={() => setInviteOpen(true)} data-testid="invite-create-btn"><UserPlus className="h-4 w-4 mr-1" />Invite teammate</Button>
+          </div>
+          <div className="surface mb-6">
+            <div className="px-6 py-3 overline border-b border-border">Members</div>
+            <ul className="divide-y divide-border">
+              {staff.map((u) => (
+                <li key={u.id} className="flex items-center gap-5 px-6 py-3" data-testid={`staff-row-${u.id}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium">{u.name}</div>
+                    <div className="text-xs text-muted-foreground">{u.email}</div>
+                  </div>
+                  <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={u.role} onChange={(e) => changeRole(u, e.target.value)} data-testid={`staff-role-${u.id}`}>
+                    <option value="owner">owner</option>
+                    <option value="admin">admin</option>
+                    <option value="staff">staff</option>
+                  </select>
+                </li>
+              ))}
+              {staff.length === 0 && <li className="p-6 text-sm text-muted-foreground text-center">Just you right now.</li>}
+            </ul>
           </div>
 
-          <div className="surface p-7">
-            <div className="overline mb-3">Public page</div>
+          <div className="surface">
+            <div className="px-6 py-3 overline border-b border-border">Pending invites</div>
+            <ul className="divide-y divide-border">
+              {invites.filter((i) => i.status === "pending").map((inv) => (
+                <li key={inv.id} className="flex items-center gap-5 px-6 py-3" data-testid={`invite-row-${inv.id}`}>
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex-1 min-w-0 truncate">{inv.email}</div>
+                  <Badge variant="secondary">{inv.role}</Badge>
+                  <Button variant="outline" size="sm" onClick={() => copyInvite(inv)} data-testid={`invite-copy-${inv.id}`}><Copy className="h-3 w-3 mr-1" />Copy link</Button>
+                  <Button variant="ghost" size="icon" onClick={() => revokeInvite(inv.id)} data-testid={`invite-revoke-${inv.id}`}><Trash2 className="h-4 w-4" /></Button>
+                </li>
+              ))}
+              {invites.filter((i) => i.status === "pending").length === 0 && <li className="p-6 text-sm text-muted-foreground text-center">No pending invites.</li>}
+            </ul>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="public">
+          <div className="surface p-7 max-w-xl">
+            <div className="overline mb-3">Public page URL</div>
             <div className="flex items-center gap-2">
               <code className="flex-1 text-xs font-mono bg-muted rounded px-2 py-2 truncate">{publicUrl}</code>
-              <Button variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(publicUrl); toast.success("Copied"); }} aria-label="Copy" data-testid="settings-copy-public"><Copy className="h-4 w-4" /></Button>
-              <Link to={`/b/${tenant.slug}`} target="_blank"><Button variant="outline" size="icon" aria-label="Open" data-testid="settings-open-public"><ExternalLink className="h-4 w-4" /></Button></Link>
+              <Button variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(publicUrl); toast.success("Copied"); }}><Copy className="h-4 w-4" /></Button>
+              <Link to={`/b/${tenant.slug}`} target="_blank"><Button variant="outline" size="icon"><ExternalLink className="h-4 w-4" /></Button></Link>
             </div>
+            <p className="text-xs text-muted-foreground mt-4">To connect a custom domain, visit the Website page.</p>
           </div>
-        </aside>
-      </div>
+        </TabsContent>
+      </Tabs>
+
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent data-testid="invite-modal">
+          <DialogHeader><DialogTitle>Invite a teammate</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={inviteForm.email} onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })} data-testid="invite-email-input" /></div>
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <div className="flex gap-2">
+                {["owner", "admin", "staff"].map((r) => (
+                  <button key={r} type="button" onClick={() => setInviteForm({ ...inviteForm, role: r })} data-testid={`invite-role-${r}`}
+                    className={`px-3 py-2 rounded-lg text-[13px] border ${inviteForm.role === r ? "border-foreground bg-foreground text-background" : "border-border hover:bg-muted"}`}>{r}</button>
+                ))}
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">We'll copy the invite link to your clipboard. In Phase 3 we'll email it automatically.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setInviteOpen(false)}>Cancel</Button>
+            <Button className="btn-tenant" onClick={sendInvite} disabled={!inviteForm.email} data-testid="invite-send-btn">Create invite</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

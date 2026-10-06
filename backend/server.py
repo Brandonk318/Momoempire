@@ -19,6 +19,15 @@ from routers.admin import router as admin_router
 from routers.advisor import router as advisor_router
 from routers.public import router as public_router
 from routers.payments import router as payments_router, stripe_webhook as _stripe_wh
+from routers.conversations import router as conversations_router
+from routers.crm import router as crm_router
+from routers.reviews import router as reviews_router, public_router as reviews_public_router
+from routers.invitations import router as invitations_router, public_router as invitations_public_router
+from routers.domains import router as domains_router
+from routers.integrations import router as integrations_router
+from routers.automations import router as automations_router
+from routers.portal import router as portal_router
+from routers.usage import router as usage_router
 
 app = FastAPI(title="AI Office Platform API")
 api = APIRouter(prefix="/api")
@@ -52,6 +61,17 @@ api.include_router(admin_router)
 api.include_router(advisor_router)
 api.include_router(public_router)
 api.include_router(payments_router)
+api.include_router(conversations_router)
+api.include_router(crm_router)
+api.include_router(reviews_router)
+api.include_router(reviews_public_router)
+api.include_router(invitations_router)
+api.include_router(invitations_public_router)
+api.include_router(domains_router)
+api.include_router(integrations_router)
+api.include_router(automations_router)
+api.include_router(portal_router)
+api.include_router(usage_router)
 # Stripe is registered to deliver webhooks to /api/stripe/webhook (top-level).
 api.add_api_route("/stripe/webhook", _stripe_wh, methods=["POST"], include_in_schema=False)
 

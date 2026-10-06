@@ -266,6 +266,21 @@ async def ensure_indexes():
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.login_attempts.create_index("identifier")
     await db.audit_logs.create_index([("tenant_id", 1), ("timestamp", -1)])
+    # Phase 2
+    await db.conversations.create_index([("tenant_id", 1), ("created_at", -1)])
+    await db.conv_messages.create_index([("conversation_id", 1), ("created_at", 1)])
+    await db.estimates.create_index([("tenant_id", 1), ("created_at", -1)])
+    await db.invoices.create_index([("tenant_id", 1), ("created_at", -1)])
+    await db.review_requests.create_index([("tenant_id", 1), ("created_at", -1)])
+    await db.review_requests.create_index("public_token", unique=True)
+    await db.invitations.create_index("token", unique=True)
+    await db.invitations.create_index([("tenant_id", 1)])
+    await db.domains.create_index("domain", unique=True)
+    await db.tenant_integrations.create_index([("tenant_id", 1), ("key", 1)], unique=True)
+    await db.tenant_automations.create_index("tenant_id", unique=True)
+    await db.usage_events.create_index([("tenant_id", 1), ("metric", 1), ("period_key", 1)])
+    await db.portal_tokens.create_index("token", unique=True)
+    await db.portal_tokens.create_index("expires_at", expireAfterSeconds=0)
 
 
 async def run_all_seeds():
