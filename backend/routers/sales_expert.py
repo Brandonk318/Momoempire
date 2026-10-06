@@ -224,4 +224,9 @@ async def coach_suggestions(data: CoachIn, user: dict = Depends(require_tenant_u
         parsed["suggestions"] = (parsed.get("suggestions") or [])[:5]
         return parsed
     except Exception as e:
-        return {"suggestions": [f"(coach unavailable: {e})"], "method": "error"}
+        print(f"[coach] LLM failed: {e}")
+        return {"suggestions": [
+            "Could you tell me a bit more about what you're trying to solve?",
+            "What timeline are you working with?",
+            "I have an opening this week — want me to pencil you in?",
+        ], "method": "fallback"}

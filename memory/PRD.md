@@ -54,6 +54,21 @@ All four phases ship as **one coherent multi-tenant platform**. Adding a new ind
 - **Smart follow-up cadence**: default 3-step SMS (24h, 72h, 168h), admin-editable per tenant. Hot/warm leads auto-schedule after `/end`. Cron `/api/cron/followups` runs every 15m to dispatch due nudges. UI tab on Sales Intel with cadence editor + upcoming nudges + cancel.
 - **Call → CRM auto-fill**: `ai_insights.extract_crm_fields` extracts address/phone/email/service_requested/urgency/budget_hint/preferred_time/notes_summary (LLM + regex fallback). Calls page shows "Auto-fill CRM" button on ended calls → review panel → one-click "Save to CRM" writes to lead/customer.
 
-### Phase 5 cron contract
-`.emergent/crons.yml` registers `followups-dispatch` (*/15m) + `overage-nightly` (02:30 UTC). Both require `Authorization: Bearer $WEBHOOK_CRON_SECRET` and fire-and-forget via `asyncio.create_task`.
+### Phase 6 — Real integrations + Growth loops (Oct 2026) ✅
+- **Twilio**: `services/twilio.send_sms` (per-tenant creds from `integrations` collection → env fallback → graceful demo mode). `routers/twilio_webhook.py` exposes `/api/twilio/voice`, `/voice-turn`, `/sms`, `/missed-call` — real inbound calls bridge straight into the receptionist pipeline with TwiML `<Gather>` + `<Say Polly.Joanna>`.
+- **Resend email** (Emergent-managed): `services/email.py` with the playbook's `_assert_safe_email` guardrail gate. Templates: invite_html, review_request_html, followup_html, digest_html. Wired into invitation creation, review requests, follow-up jobs, and the weekly digest.
+- **Weekly digest**: `/api/growth/digest/preview` + `/send`; cron `weekly-digest` (Mon 9am UTC) emails every owner stats + highlights + tips.
+- **Beat-the-quote**: `discount_policies` collection (max %, max $, phrase, conditions) injected into AI system prompt. Admin UI tab on Sales Intel.
+- **Realtime voice**: `/api/realtime/token` mints an OpenAI Realtime session; returns `{available:false, fallback:'web-speech'}` when `OPENAI_API_KEY` is unset.
+- **Win-back campaigns**: `/api/growth/winback/preview|run` — bulk SMS/email to inactive customers; cutoff respected on both preview and real run; campaigns persisted and listable.
+- **Referrals**: unique code per customer at `/api/growth/referrals`, public landing `/r/:code` records visits + conversions.
+
+### Phase 7 — Expert-mode AI employee (Oct 2026) ✅
+- **Objection playbook** (`/api/sales/objections` CRUD): admin-curated "when caller says X → AI responds Y" library, injected into system prompt.
+- **Persona depth** (`/api/sales/persona`): switch tone between Receptionist / Sales Pro / Industry Expert (or custom); flows through all AI responses.
+- **Instant quote estimator** (`/api/sales/quote-estimate`): LLM-grounded ballpark range using services + knowledge, deterministic rule fallback. UI widget in Sales Intel.
+- **Real-time coach** (`/api/sales/coach`): LLM returns 3-5 verbatim suggestion lines; UI panel in Calls (click to drop into reply input). Objection library hits surface in rule fallback.
+- **Appointment reminders cron**: hourly scan sends 24h-before SMS reminders (idempotent via `reminder_sent_at`).
+- **Website embed widget**: `GET /api/public/widget/{slug}.js` returns a brand-colored floating lead-capture button; `POST /api/public/widget/{slug}/lead` writes a widget-sourced lead and converts referrals.
+- **Crons**: 4 scheduled (`followups-dispatch` /15m, `appt-reminders` hourly, `overage-nightly` 02:30, `weekly-digest` Mon 14:00). All bearer-authed via `WEBHOOK_CRON_SECRET`.
 

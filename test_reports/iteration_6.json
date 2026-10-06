@@ -1,0 +1,43 @@
+{
+  "summary": "Phase 7 full-stack testing complete. Backend: 11/11 pytest cases PASSED in /app/backend/tests/test_phase7.py — smoke (/api/health + /pricing), objections CRUD, persona GET default (receptionist + presets) & PUT to sales_pro persistence, quote-estimate (low/high/confidence/rationale/disclaimer/method, confidence ∈ {low,medium,high}), coach returns 3+ suggestions and rule-fallback branch returns the stored rebuttal when LLM is unavailable (verified via sentinel 'PAYMENT_PLAN_MARKER'), winback cutoff fix (two customers at 10d and 100d; days_inactive=30 real-run → attempted==1), cron appointment-reminders (401 without Bearer, 200 {accepted:true} with secret, appointment 24h-away gets reminder_sent_at within ~2s), widget JS unknown slug returns 'unknown workspace' warning JS, known slug returns application/javascript body containing window.__aioWidgetLoaded + tenant name, public /lead POST (no auth) returns {ok:true} and a lead with source='widget' appears in GET /api/tenants/leads, and the AI /caller-turn with persona=industry_expert + 'too expensive' objection returns 200 with {reply, action, ended}. Frontend: /app/sales-intel 5th tab (sales-tab-expert) opens Expert mode showing persona-picker, objection-library, quote-estimator. Clicking persona-sales_pro persists (API returns key='sales_pro') AND the UI button shows an 'active' indicator. Objection add+delete work via objection-pattern/objection-rebuttal/objection-save and objection-del-* (verified row count 0→1→0). Quote estimator with 'replace central AC unit' returns a $X – $Y range in quote-result ($5500 – $16000, method=llm). /app/website shows embed-snippet exactly as <script src=\".../api/public/widget/<slug>.js\" defer></script> and embed-copy-btn copies it to clipboard (verified via navigator.clipboard.readText). /app/calls coach flow: coach-btn visible on an opened call, clicking opens coach-panel with coach-line-0..N suggestions, clicking coach-line-0 populates call-input with that suggestion (UI wraps display in quotes; the raw suggestion is injected into the input — working as designed).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/sales/quote-estimate", "issue": "LLM fallback catch returns a dict with 'method':'rules'; on LLM success the model is pinned to 'openai gpt-6-sol' — if that model id ever ages out, the handler silently returns the rules fallback. Monitor model availability."},
+      {"endpoint": "POST /api/sales/coach", "issue": "On LLM exception the response is {\"suggestions\":[\"(coach unavailable: <stringified exception>)\"],\"method\":\"error\"} — leaks raw exception text to the UI. Prefer a generic message + server-side log."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/app/sales-intel · Expert mode", "issues": ["Objection empty-state is rendered as a <li>, so generic 'count li' selectors in tests see 1 after full deletion. Not a user-facing bug — just noting that empty-state should use a <div> inside the <ul> or outside it."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase7.py",
+    "/app/test_reports/pytest/phase7_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Harden coach LLM error path — don't surface raw exception text as a suggestion string.",
+    "(Optional) Monitor the pinned LLM model id 'openai gpt-6-sol' used by quote-estimate & coach so it keeps returning method='llm' rather than silently falling back."
+  ],
+  "critical_code_review_comments": [
+    "widget.py builds the JS via f-string with !r repr of tenant name/slug/primary — safe for JS string literals (repr escapes quotes), but still bypasses the lead POST size/throttling: /public/widget/{slug}/lead has no rate limit or CAPTCHA and could be abused to spam the leads table. Add per-IP rate limiting via the same pattern as other public endpoints.",
+    "sales_expert.quote_estimate / coach both pin model 'openai' + 'gpt-6-sol'. Externalize via env (SALES_LLM_MODEL) so a model id change doesn't require a code deploy.",
+    "sales_expert.coach — raw exception text leaked to UI (see minor issue above).",
+    "cron._run_appointment_reminders — the 20h–28h window + 'reminder_sent_at not exists' is idempotent, but the handler uses ISO string comparison on start_at. This only works because start_at is stored as a UTC ISO string with Z/+00:00 offset. If any legacy row stores naive ISO (no offset) it will sort incorrectly. Consider migrating to BSON Date.",
+    "conversations._tenant_bundle fires 7 Mongo queries sequentially per caller-turn. Combine into asyncio.gather for ~5x latency reduction on Twilio turn (currently 1-2s of DB round-trips in a 15s TwiML budget).",
+    "widget.py:widget_script generates JS with the host origin baked in at runtime from window.location — fine for same-origin, but when a customer embeds on their own domain, cross-origin fetch to office-engine.preview will fail CORS. Serve CORS 'Access-Control-Allow-Origin: *' explicitly on /public/widget/{slug}/lead (currently relies on global middleware)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase7.py"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (6/6 UI flows: Expert tab + persona + objection CRUD + quote + embed snippet/copy + coach)"},
+  "test_credentials": "Admin ramonajefferson10@gmail.com / AdminPass123! not used (all Phase 7 endpoints are tenant-scoped). Each run registers a fresh ui_p7_* / test_p7_* owner with password testpass123; business_name is auto-generated UIBiz<rand>/P7Biz<rand>.",
+  "seed_data_creation": "Per run: 1 tenant + 1 user; 2 customers for winback test (RecentCust 10d, OldCust 100d) with last_contacted_at patched via pymongo; 1 appointment 24h-ahead; 1 widget lead; up to 2 objections created & deleted; 1 persona row. All prefixed TEST_P7_* / UI P7 for easy cleanup.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Phase 7 is green end-to-end. test_phase7.py reads MONGO_URL/DB_NAME/WEBHOOK_CRON_SECRET from /app/backend/.env if not in env and REACT_APP_BACKEND_URL from /app/frontend/.env — portable. Note the coach-line display wraps the raw suggestion in quotes in the DOM ( \"{l}\" ), but setInput(l) uses the raw l — don't compare text_content to input value in future tests. Winback real-run now correctly applies the days_inactive cutoff (prior iteration bug is fixed). The appointment-reminders cron is fire-and-forget via asyncio.create_task; the test polls up to 7.5s and reminder_sent_at reliably lands within ~1s.",
+  "rca of the issue": "N/A — no functional defects found this iteration. Prior iteration's winback_run bug (ignoring days_inactive on real run) is verified fixed: query now reuses the same {$or:[last_contacted_at<=cutoff, {!exists,created_at<=cutoff}]} filter from winback_preview and adds the channel-field existence constraint."
+}
