@@ -95,3 +95,29 @@ All four phases ship as **one coherent multi-tenant platform**. Adding a new ind
 - **Public API** at `routers/marketing.py` (no auth): `POST /api/public/demo/start`, `POST /api/public/demo/turn` (10 turns max, IP rate-limited), `POST /api/public/waitlist`. Demo reuses the real `receptionist_reply` pipeline with per-industry preset services + FAQs.
 - **Legal pages** at `/privacy` and `/terms` via `pages/Legal.jsx` — honest, SaaS-standard copy ready for real customers.
 
+
+### Phase 11 — Repeat Scheduling · Testimonial Converter · Spanish Mode (Feb 2026) ✅
+- **Smart Repeat Scheduling** (`routers/repeat.py`, UI `/app/repeat`):
+  - Four cadences: `annual`, `semi_annual`, `quarterly`, `custom` (interval_months).
+  - Per-tenant `default_cadence` suggestion by business_type (maintenance → annual; service → quarterly).
+  - Schedules carry next_due_at + reminder_days_before. Cron `/api/cron/repeat-reminders` (daily 13:30 UTC) sends email + SMS reminders in-window, then advances next_due_at by cadence (catches up on missed cycles). Manual trigger: `POST /api/repeat/schedules/{id}/send-reminder`.
+  - Email/SMS copy branches on tenant.lang (EN/ES).
+- **Testimonial Auto-Converter** (`routers/testimonials.py`, UI `/app/testimonials`, public `/t/consent/:token`):
+  - Any 5★ review submitted via `POST /api/public/reviews/{token}` auto-creates a `testimonials` record in `consent_pending`.
+  - LLM polish via `gpt-6-sol` (Emergent LLM key), deterministic fallback trims to 240 chars.
+  - Consent flow: email (primary) + Twilio SMS followup 4h later. Customer sees polished preview on `/t/consent/:token`, can edit (400 char cap) and approve/reject → moves to `admin_review` → owner approves/rejects → `published`.
+  - Admin API: `GET /api/testimonials` (filter by status), `POST /api/testimonials/{id}/decision`, manual seed via `POST /api/testimonials/seed`.
+  - Public gallery: `GET /api/public/testimonials/by-slug/{slug}`.
+- **Spanish Mode (bilingual EN/ES)**:
+  - Frontend: `react-i18next` + browser-language-detector, locale files at `src/i18n/locales/{en,es}.json`, persisted in `localStorage.aiop_lang`. `LanguageSwitcher.jsx` mounted in dashboard top-bar and landing header.
+  - Backend: `PUT /api/tenants/me/language` stores `lang` on tenant + user. `ai_receptionist.receptionist_reply(..., lang='es')` appends a Spanish directive to the system prompt; fallbacks translated. Public demo accepts `{lang:"es"}` and uses `greeting_es` per preset.
+  - Repeat + testimonial email/SMS copy auto-branches on tenant.lang.
+- **New cron**: `.emergent/crons.yml` — `repeat-reminders` at `30 13 * * *`.
+- **Testing**: `/app/backend/tests/test_phase10_new_features.py` (24 cases) + full E2E frontend smoke (iteration_9.json, 100% pass).
+
+### Upcoming / Backlog
+- P1: End-to-end Stripe Checkout wiring to `stripe_price_id` on frontend plan buttons.
+- P2: Translate remaining Landing marketing copy sections + admin panels (framework is in place; keys exist in locales/*.json).
+- P2: Vector embeddings for knowledge docs; CNAME active verification; push to github.com/momoempire/Momoempire.
+- P3: Real WebRTC voice demo on landing (currently text).
+

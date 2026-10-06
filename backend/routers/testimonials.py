@@ -107,7 +107,7 @@ async def start_testimonial_flow(tenant_id: str, review: dict) -> Optional[dict]
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "name": 1, "lang": 1, "slug": 1}) or {}
     biz = tenant.get("name") or "us"
     lang = (tenant.get("lang") or "en").lower()
-    frontend_base = os.environ.get("REACT_APP_BACKEND_URL") or os.environ.get("APP_BASE_URL") or ""
+    frontend_base = os.environ.get("FRONTEND_URL") or os.environ.get("REACT_APP_BACKEND_URL") or os.environ.get("APP_BASE_URL") or ""
     # Idempotency: don't re-seed if we already have one for this review
     existing = await db.testimonials.find_one(
         {"tenant_id": tenant_id, "review_id": review.get("id")}, {"_id": 0}
