@@ -82,5 +82,16 @@ All four phases ship as **one coherent multi-tenant platform**. Adding a new ind
 - **Review-request autopilot (2h)**: On post-job completion, if `review_url` is set, schedules an SMS 2 hours later asking for a Google review.
 - **Service-area heatmap**: `/api/growth/heatmap` aggregates leads+customers by extracted ZIP, geocodes top ZIPs via Nominatim (cached in `geocode_cache`), returns bar + pin-map data. Recharts bar + inline SVG pin map in UI.
 - **Google Calendar ICS**: `/api/growth/standup/today.ics` streams a VEVENT with today's agenda. Owner clicks "Add to Calendar" on Standup tab → opens in Google / Apple / Outlook.
-- Crons live: 7 total (`followups-dispatch` /15m, `callbacks-due` /5m, `appt-confirmations` :25 hourly, `appt-reminders` hourly, `overage-nightly` 02:30, `weekly-digest` Mon 14:00, `daily-standup` 13:00).
+### Phase 10 — Marketing homepage (Oct 2026) ✅
+- **Rewrote `/app/frontend/src/pages/Landing.jsx`** as the platform's own marketing site at `/`:
+  - Hero: "We build you an AI employee and a digital office." · live trial copy pulled from `/api/plans` (`trial_days`, `ai_minutes`, `calls` never go stale).
+  - 3 pillars: AI receptionist · Sales intelligence · Growth autopilot.
+  - Industry showcase: HVAC, dental, legal, salon — adapted services + bullet proofs.
+  - 3-step "how it works": sign up → connect phone → AI starts answering.
+  - Interactive demo card (`/components/DemoCall.jsx`) with industry switcher + quick prompts + Web Speech mic input.
+  - FAQ accordion (replace staff / mess-up safety / cancel anytime / data / Twilio / languages).
+  - Waitlist capture (email + name + biz + industry + note) with Resend confirmation email.
+  - Footer with `/privacy` and `/terms` links.
+- **Public API** at `routers/marketing.py` (no auth): `POST /api/public/demo/start`, `POST /api/public/demo/turn` (10 turns max, IP rate-limited), `POST /api/public/waitlist`. Demo reuses the real `receptionist_reply` pipeline with per-industry preset services + FAQs.
+- **Legal pages** at `/privacy` and `/terms` via `pages/Legal.jsx` — honest, SaaS-standard copy ready for real customers.
 

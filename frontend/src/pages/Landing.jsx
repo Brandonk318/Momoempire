@@ -1,209 +1,319 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { api, errMessage } from "@/lib/api";
+import { toast } from "sonner";
+import DemoCall from "@/components/DemoCall";
 import {
-  ArrowRight, Bot, PhoneCall, CalendarClock, MessageSquare,
-  Globe, ShieldCheck, Workflow, Star, Sparkles, Factory,
+  ArrowRight, Bot, Target, Rocket, Sparkles, PhoneCall, UserPlus,
+  Headphones, ChevronDown, Check,
 } from "lucide-react";
 
+const PILLARS = [
+  { icon: Bot, title: "AI receptionist", desc: "Answers calls and texts 24/7, books appointments into your calendar, hands off to a human when needed. Trained on your services and prices.", testid: "pillar-receptionist" },
+  { icon: Target, title: "Sales intelligence", desc: "Every call auto-scored hot / warm / cold with the reason. Objection playbook. Discount guardrails. Follow-up cadence that never misses a warm lead.", testid: "pillar-sales" },
+  { icon: Rocket, title: "Growth autopilot", desc: "Weekly digest, review requests, win-back campaigns, referral tracking, service-area heatmap, and a one-line website widget — all running without you.", testid: "pillar-growth" },
+];
+
 const INDUSTRIES = [
-  { name: "HVAC", icon: "🔥" },
-  { name: "Plumbing", icon: "💧" },
-  { name: "Electrical", icon: "⚡" },
-  { name: "Roofing", icon: "🏠" },
-  { name: "Dental", icon: "🦷" },
-  { name: "Physical Therapy", icon: "🏃" },
-  { name: "Landscaping", icon: "🌿" },
-  { name: "Pest Control", icon: "🪲" },
-  { name: "Contractor", icon: "🔨" },
-  { name: "Independent", icon: "💼" },
+  { key: "hvac",    label: "HVAC",   example: "Service calls, emergency dispatch, maintenance plans",       bullets: ["Books same-day AC calls", "Quotes tune-ups on the spot", "Escalates emergencies to on-call"] },
+  { key: "dental",  label: "Dental", example: "New-patient intake, insurance checks, hygiene reminders",    bullets: ["Verifies insurance", "Books hygiene appointments", "Sends 24h reminders"] },
+  { key: "legal",   label: "Legal",  example: "Intake, consult scheduling, matter triage",                  bullets: ["Qualifies by practice area", "Books free consultations", "Captures matter details"] },
+  { key: "salon",   label: "Salon",  example: "Stylist booking, service questions, walk-in handling",       bullets: ["Books per stylist", "Explains service pricing", "Captures first-timer discount leads"] },
+];
+
+const STEPS = [
+  { icon: UserPlus, n: "01", title: "Sign up", desc: "Create your workspace. Pick an industry — we seed starter services, FAQs, and an AI persona in 60 seconds." },
+  { icon: PhoneCall, n: "02", title: "Connect your phone", desc: "Point your business line to our Twilio number (or get one from us). SMS and calls start flowing in instantly." },
+  { icon: Headphones, n: "03", title: "The AI starts answering", desc: "Every call, every text — the AI handles it on-brand, books jobs, and surfaces hot leads to your dashboard." },
+];
+
+const FAQS = [
+  { q: "Will this replace my staff?", a: "No. It replaces the voicemail and the missed-call black hole. Think of it as the receptionist you can afford to have 24/7 — human staff still handle on-site work and the calls the AI escalates." },
+  { q: "What happens if the AI messes up?", a: "Three layers of safety: it never makes commitments outside your knowledge base, every call is transcribed so you can audit, and you set guardrails (discount caps, objection script, persona depth). You can also take over any live call from the dashboard." },
+  { q: "Can I cancel anytime?", a: "Yes. Monthly plans — cancel in-app, access runs through the end of the paid period. No calls to a rep, no retention tricks." },
+  { q: "What about my customer data?", a: "Multi-tenant isolation on day one. We don't sell data. Export or delete anything on request. Full privacy policy linked below." },
+  { q: "Do I need a Twilio account?", a: "No — you can bring your own, or we provision a number for you inside your workspace. Either works." },
+  { q: "What languages does it speak?", a: "Primarily English today. Other languages are coming — join the waitlist and tell us which." },
 ];
 
 export default function Landing() {
+  const [trial, setTrial] = useState(null);
+  const [openFaq, setOpenFaq] = useState(0);
+  const [wlForm, setWlForm] = useState({ email: "", name: "", business_name: "", industry: "", note: "" });
+  const [wlSent, setWlSent] = useState(false);
+  const [wlSending, setWlSending] = useState(false);
+
+  useEffect(() => {
+    api.get("/plans").then((r) => {
+      const t = (r.data || []).find((p) => p.key === "trial");
+      setTrial(t || null);
+    }).catch(() => {});
+  }, []);
+
+  const submitWaitlist = async (e) => {
+    e.preventDefault();
+    setWlSending(true);
+    try {
+      await api.post("/public/waitlist", wlForm);
+      setWlSent(true); toast.success("You're on the list.");
+    } catch (err) { toast.error(errMessage(err)); }
+    finally { setWlSending(false); }
+  };
+
+  const trialLimits = trial?.limits || {};
+  const trialDays = trial?.trial_days || 60;
+  const trialMinutes = trialLimits.ai_minutes || 50;
+  const trialCalls = trialLimits.calls || 25;
+
   return (
     <div className="marketing-shell relative overflow-x-hidden" data-testid="landing-page">
       <div className="marketing-noise fixed inset-0 opacity-50" aria-hidden />
+
       {/* Nav */}
       <header className="sticky top-0 z-30 glass-crystal border-b border-white/10">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <Logo variant="light" />
           <nav className="hidden md:flex items-center gap-8 text-[13px] text-white/70">
-            <a href="#how" className="hover:text-white">How it works</a>
+            <a href="#features" className="hover:text-white">Features</a>
             <a href="#industries" className="hover:text-white">Industries</a>
+            <a href="#how" className="hover:text-white">How it works</a>
+            <a href="#demo" className="hover:text-white">Live demo</a>
             <Link to="/pricing" className="hover:text-white">Pricing</Link>
+            <a href="#faq" className="hover:text-white">FAQ</a>
           </nav>
           <div className="flex items-center gap-2">
             <Link to="/login"><Button variant="ghost" className="text-white hover:bg-white/10" data-testid="landing-login-btn">Log in</Button></Link>
-            <Link to="/signup"><Button className="bg-white text-black hover:bg-white/90" data-testid="landing-signup-btn">Get started<ArrowRight className="h-4 w-4 ml-1" /></Button></Link>
+            <Link to="/signup"><Button className="bg-white text-black hover:bg-white/90" data-testid="landing-signup-btn">Try it free<ArrowRight className="h-4 w-4 ml-1" /></Button></Link>
           </div>
         </div>
       </header>
 
-      {/* Hero bento */}
-      <section className="relative max-w-7xl mx-auto px-6 pt-20 pb-28">
-        <div className="grid grid-cols-12 gap-5">
-          <div className="col-span-12 lg:col-span-8">
+      {/* Hero */}
+      <section className="relative max-w-7xl mx-auto px-6 pt-20 pb-20">
+        <div className="grid grid-cols-12 gap-6 items-start">
+          <div className="col-span-12 lg:col-span-7">
             <Badge className="bg-white/10 text-white/80 border border-white/15 mb-5 hover:bg-white/10">
-              <Sparkles className="h-3 w-3 mr-1.5" /> Phase 1 · AI Office Platform
+              <Sparkles className="h-3 w-3 mr-1.5" /> AI Office Platform
             </Badge>
             <h1 className="font-display text-5xl md:text-7xl leading-[0.95] tracking-tight text-white">
-              We build you an{" "}
-              <span className="italic text-white/90">AI employee</span><br />
-              and a digital office.
+              We build you an AI employee <span className="text-white/60">and a digital office.</span>
             </h1>
             <p className="mt-6 text-white/70 text-lg max-w-xl">
-              A done-for-you workspace that answers calls, books jobs, and runs
-              operations for small businesses — in every industry. Hardware elite,
-              face swappable.
+              Your business never misses a call again. The AI answers, books jobs, follows up with warm leads,
+              and brings you a weekly summary — on autopilot, in your voice.
             </p>
-            <div className="mt-8 flex items-center gap-3">
+            <div className="mt-8 flex flex-wrap gap-3 items-center">
               <Link to="/signup">
-                <Button size="lg" className="bg-white text-black hover:bg-white/90 h-12 px-6" data-testid="hero-start-btn">
-                  Start your AI Office <ArrowRight className="h-4 w-4 ml-2" />
+                <Button className="h-12 px-6 bg-white text-black hover:bg-white/90 text-base" data-testid="hero-cta-signup">
+                  Try it free<ArrowRight className="h-4 w-4 ml-1.5" />
                 </Button>
               </Link>
-              <a href="#industries" className="text-white/70 hover:text-white text-[13px] inline-flex items-center gap-1.5">
-                See industries we power <ArrowRight className="h-3.5 w-3.5" />
-              </a>
+              <a href="#demo"><Button variant="ghost" className="h-12 px-5 text-white hover:bg-white/10" data-testid="hero-cta-demo">Try the live demo →</Button></a>
             </div>
+            {trial && (
+              <p className="mt-4 text-[13px] text-white/60" data-testid="hero-trial-copy">
+                Free trial: <strong className="text-white">{trialDays} days</strong>, {trialMinutes} AI minutes,
+                {" "}{trialCalls} calls. No credit card.
+              </p>
+            )}
           </div>
-
-          <aside className="col-span-12 lg:col-span-4 grid grid-cols-2 gap-4">
-            <div className="glass-crystal rounded-2xl p-5">
-              <div className="overline text-white/50">Live demo</div>
-              <div className="mt-2 flex items-center gap-2">
-                <div className="h-9 w-9 rounded-full bg-emerald-400 grid place-items-center text-black"><PhoneCall className="h-4 w-4" /></div>
-                <div className="text-sm text-white">Call answered</div>
-              </div>
-              <div className="mt-3 text-[12px] text-white/60">Alex (AI) · 0:14</div>
-              <div className="mt-2 text-[13px] text-white">"We can send a tech between 2-4pm today."</div>
-            </div>
-            <div className="glass-crystal rounded-2xl p-5">
-              <div className="overline text-white/50">Booked</div>
-              <div className="font-display text-3xl text-white mt-2">24</div>
-              <div className="text-[12px] text-white/60">appointments this week</div>
-            </div>
-            <div className="glass-crystal rounded-2xl p-5 col-span-2">
-              <div className="overline text-white/50">AI Employee</div>
-              <div className="mt-3 flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-indigo-400 to-fuchsia-400 grid place-items-center text-white"><Bot className="h-5 w-5" /></div>
-                <div>
-                  <div className="text-sm text-white">Alex · HVAC</div>
-                  <div className="text-[12px] text-white/60">Warm · Direct · Books fast</div>
-                </div>
-              </div>
-            </div>
-          </aside>
-        </div>
-
-        <div className="mt-16 flex items-center gap-6 text-[12px] text-white/40 font-mono">
-          <span>⌁ Multi-tenant</span>
-          <span>⌁ API-first</span>
-          <span>⌁ SOC-ready</span>
-          <span>⌁ Stripe-powered</span>
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section id="how" className="max-w-7xl mx-auto px-6 py-20">
-        <div className="overline text-white/50 mb-3">How it works</div>
-        <h2 className="font-display text-4xl md:text-5xl tracking-tight text-white max-w-2xl">
-          From sign-up to a staffed office in minutes.
-        </h2>
-
-        <div className="mt-12 grid md:grid-cols-3 gap-5">
-          {[
-            { n: "01", t: "Tell us about your business", d: "A short, plain-English wizard. Industry, hours, services, and the way you talk to customers.", icon: Workflow },
-            { n: "02", t: "We assemble your AI Office", d: "Industry templates seed your AI employee, FAQs, intake, escalation, and services — tailored to your trade.", icon: Bot },
-            { n: "03", t: "Go live, keep swapping the face", d: "Change your brand, voice, and visuals anytime. The core engine stays rock-solid underneath.", icon: Sparkles },
-          ].map((s) => {
-            const Icon = s.icon;
-            return (
-              <div key={s.n} className="glass-crystal rounded-2xl p-6 lift">
-                <div className="flex items-center justify-between mb-6">
-                  <span className="font-mono text-xs text-white/50">{s.n}</span>
-                  <Icon className="h-5 w-5 text-white/70" />
-                </div>
-                <h3 className="font-display text-xl text-white mb-2">{s.t}</h3>
-                <p className="text-sm text-white/60 leading-relaxed">{s.d}</p>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Feature bento */}
-      <section className="max-w-7xl mx-auto px-6 py-20">
-        <div className="grid grid-cols-12 gap-5">
-          <div className="col-span-12 md:col-span-7 glass-crystal rounded-2xl p-8 lift">
-            <div className="overline text-white/50 mb-3">A full digital office</div>
-            <h3 className="font-display text-3xl text-white">Twenty workspaces. One console.</h3>
-            <p className="text-white/60 mt-3 max-w-lg">Calls, messages, leads, customers, appointments, services, payments, website, portal, reviews, analytics, advisor, knowledge, automations, integrations, numbers, usage, billing, settings — all under one calm, non-technical interface.</p>
-            <div className="mt-6 grid grid-cols-4 gap-2">
-              {[PhoneCall, MessageSquare, CalendarClock, Globe, Star, Workflow, ShieldCheck, Bot].map((Ic, i) => (
-                <div key={i} className="aspect-square rounded-xl bg-white/5 border border-white/10 grid place-items-center">
-                  <Ic className="h-5 w-5 text-white/70" />
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="col-span-12 md:col-span-5 glass-crystal rounded-2xl p-8 lift">
-            <div className="overline text-white/50 mb-3">Swappable face</div>
-            <h3 className="font-display text-3xl text-white">Your brand, instantly applied.</h3>
-            <p className="text-white/60 mt-3">A CSS-variable brand system means tenants swap colors, logo, and voice in seconds — the underlying hardware never changes.</p>
-            <div className="mt-6 flex gap-2 flex-wrap">
-              {["#0A0A0A","#2563EB","#059669","#DC2626","#7C3AED","#D97706"].map((c) => (
-                <div key={c} className="h-10 w-10 rounded-lg border border-white/10" style={{ background: c }} />
-              ))}
-            </div>
+          <div className="col-span-12 lg:col-span-5">
+            <HeroPreview />
           </div>
         </div>
       </section>
 
-      {/* Industries */}
-      <section id="industries" className="max-w-7xl mx-auto px-6 py-20">
-        <div className="flex items-end justify-between flex-wrap gap-4">
-          <div>
-            <div className="overline text-white/50 mb-3">Industries we power</div>
-            <h2 className="font-display text-4xl md:text-5xl tracking-tight text-white">One engine. Every trade.</h2>
-          </div>
-          <p className="max-w-md text-white/60">Admins add future industries without rebuilding. Templates ship with AI personality, services, FAQs, escalations and more.</p>
-        </div>
-        <div className="mt-10 grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="landing-industries">
-          {INDUSTRIES.map((ind) => (
-            <div key={ind.name} className="glass-crystal rounded-xl p-5 lift">
-              <div className="text-2xl">{ind.icon}</div>
-              <div className="text-white mt-3 font-medium">{ind.name}</div>
-              <div className="text-[11px] text-white/40 mt-1 font-mono">Template ready</div>
+      {/* Features */}
+      <section id="features" className="relative max-w-7xl mx-auto px-6 py-20">
+        <div className="overline text-white/60 mb-3">Three pillars</div>
+        <h2 className="font-display text-4xl md:text-5xl text-white tracking-tight max-w-2xl">An entire office in one place.</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-10">
+          {PILLARS.map((p) => (
+            <div key={p.title} className="glass-crystal rounded-2xl p-6 text-white" data-testid={p.testid}>
+              <div className="h-10 w-10 rounded-xl bg-white/10 border border-white/10 grid place-items-center mb-5"><p.icon className="h-5 w-5" /></div>
+              <h3 className="font-medium text-xl">{p.title}</h3>
+              <p className="text-white/70 text-sm mt-2 leading-relaxed">{p.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Pricing hint */}
-      <section id="pricing" className="max-w-7xl mx-auto px-6 py-20">
-        <div className="glass-crystal rounded-3xl p-10 md:p-14 relative overflow-hidden">
-          <Factory className="h-72 w-72 absolute -right-10 -bottom-10 text-white/5" />
-          <div className="relative">
-            <h2 className="font-display text-4xl md:text-5xl text-white tracking-tight max-w-2xl">
-              Launch today, pay when you're ready.
-            </h2>
-            <p className="text-white/60 mt-4 max-w-xl">Start free. Plug Stripe into your account in two clicks when you're ready to turn on payments. We handle the country rules so you don't have to.</p>
-            <div className="mt-8 flex gap-3">
-              <Link to="/signup"><Button size="lg" className="bg-white text-black hover:bg-white/90 h-12 px-6" data-testid="pricing-start-btn">Create account</Button></Link>
-              <Link to="/login"><Button size="lg" variant="outline" className="h-12 px-6 bg-transparent text-white border-white/20 hover:bg-white/10" data-testid="pricing-login-btn">I already have one</Button></Link>
+      {/* Industries */}
+      <section id="industries" className="relative max-w-7xl mx-auto px-6 py-20">
+        <div className="overline text-white/60 mb-3">Not one-size-fits-all</div>
+        <h2 className="font-display text-4xl md:text-5xl text-white tracking-tight max-w-2xl">Same brain, your vocabulary.</h2>
+        <p className="text-white/70 mt-4 max-w-xl">The AI adapts to your industry out of the box — jargon, service names, pricing patterns, intake flow.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-10">
+          {INDUSTRIES.map((i) => (
+            <div key={i.key} className="glass-crystal rounded-2xl p-5 text-white" data-testid={`industry-card-${i.key}`}>
+              <div className="font-display text-2xl tracking-tight">{i.label}</div>
+              <div className="text-[12px] text-white/60 mt-1">{i.example}</div>
+              <ul className="mt-4 space-y-1.5 text-sm">
+                {i.bullets.map((b) => (
+                  <li key={b} className="flex gap-2"><Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" /><span className="text-white/80">{b}</span></li>
+                ))}
+              </ul>
             </div>
+          ))}
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section id="how" className="relative max-w-7xl mx-auto px-6 py-20">
+        <div className="overline text-white/60 mb-3">How it works</div>
+        <h2 className="font-display text-4xl md:text-5xl text-white tracking-tight max-w-2xl">Live in under five minutes.</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-10">
+          {STEPS.map((s) => (
+            <div key={s.n} className="glass-crystal rounded-2xl p-7 text-white" data-testid={`step-${s.n}`}>
+              <div className="font-mono text-white/40 text-sm">{s.n}</div>
+              <div className="h-10 w-10 rounded-xl bg-white/10 border border-white/10 grid place-items-center mt-3 mb-4"><s.icon className="h-5 w-5" /></div>
+              <h3 className="font-medium text-xl">{s.title}</h3>
+              <p className="text-white/70 text-sm mt-2 leading-relaxed">{s.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Live demo */}
+      <section id="demo" className="relative max-w-7xl mx-auto px-6 py-20">
+        <div className="grid grid-cols-12 gap-6 items-start">
+          <div className="col-span-12 lg:col-span-5">
+            <div className="overline text-white/60 mb-3">See it, don't imagine it</div>
+            <h2 className="font-display text-4xl md:text-5xl text-white tracking-tight">Talk to the AI<br />right now.</h2>
+            <p className="text-white/70 mt-5 max-w-md">
+              Pick an industry, type (or tap the mic) and have an actual conversation.
+              No signup. No credit card. 10 turns per demo.
+            </p>
+            <ul className="mt-6 space-y-2 text-sm text-white/80">
+              <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />Same AI brain the real workspace runs on</li>
+              <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />Industry-shaped services, pricing, and FAQs</li>
+              <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />Try tough questions — "I got a cheaper quote," "I need you today"</li>
+            </ul>
+          </div>
+          <div className="col-span-12 lg:col-span-7">
+            <DemoCall />
           </div>
         </div>
       </section>
 
-      <footer className="border-t border-white/10 py-10">
-        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between flex-wrap gap-4 text-[12px] text-white/40">
-          <Logo variant="light" />
-          <div>© {new Date().getFullYear()} AI Office Platform · Hardware elite, face swappable</div>
+      {/* FAQ */}
+      <section id="faq" className="relative max-w-4xl mx-auto px-6 py-20">
+        <div className="overline text-white/60 mb-3">Frequently asked</div>
+        <h2 className="font-display text-4xl md:text-5xl text-white tracking-tight">The honest answers.</h2>
+        <div className="mt-10 divide-y divide-white/10 border-y border-white/10">
+          {FAQS.map((f, i) => (
+            <button key={f.q} onClick={() => setOpenFaq(openFaq === i ? -1 : i)} className="w-full text-left py-5 text-white hover:bg-white/5 px-2 transition" data-testid={`faq-${i}`}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="font-medium">{f.q}</div>
+                <ChevronDown className={`h-5 w-5 shrink-0 transition ${openFaq === i ? "rotate-180" : ""}`} />
+              </div>
+              {openFaq === i && <p className="text-white/70 mt-3 text-sm leading-relaxed">{f.a}</p>}
+            </button>
+          ))}
         </div>
+      </section>
+
+      {/* Waitlist */}
+      <section id="waitlist" className="relative max-w-5xl mx-auto px-6 py-20">
+        <div className="glass-crystal rounded-3xl p-8 md:p-12 text-white grid grid-cols-12 gap-8 items-center">
+          <div className="col-span-12 md:col-span-6">
+            <div className="overline text-white/60 mb-3">Not ready to try?</div>
+            <h2 className="font-display text-4xl tracking-tight">Join the early-access list.</h2>
+            <p className="text-white/70 mt-4">
+              We'll send a short note when seats open in your industry — and we'll never spam you.
+            </p>
+          </div>
+          <div className="col-span-12 md:col-span-6">
+            {wlSent ? (
+              <div className="rounded-xl bg-emerald-400/10 border border-emerald-300/20 p-6 text-emerald-100" data-testid="waitlist-success">
+                <div className="font-medium">You're on the list.</div>
+                <div className="text-sm text-emerald-100/80 mt-1">We'll reach out as soon as your industry opens.</div>
+              </div>
+            ) : (
+              <form onSubmit={submitWaitlist} className="space-y-3" data-testid="waitlist-form">
+                <Input required type="email" placeholder="you@yourbusiness.com" value={wlForm.email} onChange={(e) => setWlForm({ ...wlForm, email: e.target.value })} className="bg-white/5 border-white/20 text-white placeholder:text-white/40" data-testid="waitlist-email" />
+                <div className="grid grid-cols-2 gap-3">
+                  <Input placeholder="Your name" value={wlForm.name} onChange={(e) => setWlForm({ ...wlForm, name: e.target.value })} className="bg-white/5 border-white/20 text-white placeholder:text-white/40" data-testid="waitlist-name" />
+                  <Input placeholder="Business" value={wlForm.business_name} onChange={(e) => setWlForm({ ...wlForm, business_name: e.target.value })} className="bg-white/5 border-white/20 text-white placeholder:text-white/40" data-testid="waitlist-biz" />
+                </div>
+                <Input placeholder="Industry (e.g. HVAC, dental)" value={wlForm.industry} onChange={(e) => setWlForm({ ...wlForm, industry: e.target.value })} className="bg-white/5 border-white/20 text-white placeholder:text-white/40" data-testid="waitlist-industry" />
+                <Textarea rows={2} placeholder="Anything specific you'd want it to do?" value={wlForm.note} onChange={(e) => setWlForm({ ...wlForm, note: e.target.value })} className="bg-white/5 border-white/20 text-white placeholder:text-white/40" data-testid="waitlist-note" />
+                <Button type="submit" disabled={wlSending || !wlForm.email} className="w-full h-11 bg-white text-black hover:bg-white/90" data-testid="waitlist-submit">
+                  {wlSending ? "Adding…" : "Join waitlist"}
+                </Button>
+              </form>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <section className="relative max-w-5xl mx-auto px-6 py-20 text-center text-white">
+        <h2 className="font-display text-5xl md:text-6xl tracking-tight">Your AI office is 60 seconds away.</h2>
+        <p className="text-white/70 mt-5 max-w-xl mx-auto">Spin up your workspace, pick an industry, and the AI employee is on the clock.</p>
+        <Link to="/signup"><Button className="mt-8 h-12 px-7 bg-white text-black hover:bg-white/90 text-base" data-testid="final-cta-signup">Try it free<ArrowRight className="h-4 w-4 ml-1.5" /></Button></Link>
+      </section>
+
+      {/* Footer */}
+      <footer className="relative border-t border-white/10 mt-10 text-white/60">
+        <div className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-2 md:grid-cols-4 gap-8 text-sm">
+          <div>
+            <Logo variant="light" />
+            <p className="mt-3 text-xs text-white/50 max-w-xs">Done-for-you AI office platform for service businesses.</p>
+          </div>
+          <div>
+            <div className="overline text-white/50 mb-3">Product</div>
+            <ul className="space-y-2">
+              <li><a href="#features" className="hover:text-white">Features</a></li>
+              <li><a href="#industries" className="hover:text-white">Industries</a></li>
+              <li><Link to="/pricing" className="hover:text-white">Pricing</Link></li>
+              <li><a href="#demo" className="hover:text-white">Live demo</a></li>
+            </ul>
+          </div>
+          <div>
+            <div className="overline text-white/50 mb-3">Company</div>
+            <ul className="space-y-2">
+              <li><a href="#waitlist" className="hover:text-white">Early access</a></li>
+              <li><a href="mailto:hello@aioffice.io" className="hover:text-white">Contact</a></li>
+            </ul>
+          </div>
+          <div>
+            <div className="overline text-white/50 mb-3">Legal</div>
+            <ul className="space-y-2">
+              <li><Link to="/privacy" className="hover:text-white" data-testid="footer-privacy-link">Privacy Policy</Link></li>
+              <li><Link to="/terms" className="hover:text-white" data-testid="footer-terms-link">Terms of Service</Link></li>
+            </ul>
+          </div>
+        </div>
+        <div className="max-w-7xl mx-auto px-6 pb-8 text-[11px] text-white/40">© {new Date().getFullYear()} AI Office · All rights reserved.</div>
       </footer>
+    </div>
+  );
+}
+
+function HeroPreview() {
+  // Minimal, non-chat visual mock so hero isn't static text.
+  return (
+    <div className="glass-crystal rounded-2xl p-5 text-white" data-testid="hero-preview">
+      <div className="flex items-center gap-2 text-xs text-white/60">
+        <span className="h-2 w-2 rounded-full bg-emerald-400 inline-block" /> AI online
+      </div>
+      <div className="mt-4 space-y-2">
+        <div className="bg-white/10 rounded-2xl px-3 py-2 text-[13px] w-fit max-w-[85%]">Comfort Pros HVAC, this is Alex — how can I help?</div>
+        <div className="bg-white text-black rounded-2xl px-3 py-2 text-[13px] w-fit max-w-[85%] ml-auto">My AC isn't cooling and the house is 85°</div>
+        <div className="bg-white/10 rounded-2xl px-3 py-2 text-[13px] w-fit max-w-[85%]">That's uncomfortable — I can get a tech out between 2–4pm today. What's the address?</div>
+        <div className="bg-white text-black rounded-2xl px-3 py-2 text-[13px] w-fit max-w-[85%] ml-auto">423 Oak St, Austin</div>
+        <div className="bg-white/10 rounded-2xl px-3 py-2 text-[13px] w-fit max-w-[85%]">Booked. We'll text when the tech is 30 minutes out. Service call is $89 plus parts.</div>
+      </div>
+      <div className="mt-5 flex items-center gap-2 border-t border-white/10 pt-4 text-xs">
+        <Badge className="bg-rose-400/20 text-rose-200 border border-rose-300/30">🔥 hot</Badge>
+        <span className="text-white/60">Lead scored and sent to CRM</span>
+      </div>
     </div>
   );
 }

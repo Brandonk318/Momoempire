@@ -8,6 +8,7 @@ import AdminLayout from "@/components/layouts/AdminLayout";
 // Public
 import Landing from "@/pages/Landing";
 import Pricing from "@/pages/Pricing";
+import { Privacy, Terms } from "@/pages/Legal";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import ForgotPassword from "@/pages/ForgotPassword";
@@ -75,6 +76,8 @@ function Router() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/pricing" element={<Pricing />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms" element={<Terms />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
