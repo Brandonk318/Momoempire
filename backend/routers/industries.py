@@ -4,6 +4,7 @@ from typing import List
 from db import get_db
 from models import IndustryTemplate, IndustryTemplateIn, _now_iso
 from security import require_platform_admin
+from niche_profiles import get_niche_office_profile
 
 router = APIRouter(prefix="/industries", tags=["industries"])
 
@@ -18,6 +19,10 @@ async def list_industries(active_only: bool = False):
     db = get_db()
     q = {"active": True} if active_only else {}
     items = await db.industries.find(q, {"_id": 0}).sort("name", 1).to_list(200)
+    for item in items:
+        profile = get_niche_office_profile(item.get("slug"))
+        if profile:
+            item["office_profile"] = profile
     return items
 
 
@@ -27,6 +32,9 @@ async def get_industry(slug: str):
     doc = await db.industries.find_one({"slug": slug}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Industry not found")
+    profile = get_niche_office_profile(doc.get("slug"))
+    if profile:
+        doc["office_profile"] = profile
     return doc
 
 
