@@ -1,0 +1,44 @@
+{
+  "summary": "Phase 4 backend-only testing complete. Created /app/backend/tests/test_phase4.py (21 tests) covering: public /api/plans (prices $19.99/$49.99/$99.99/$199.99 verified), admin plans list+update (enterprise included), admin cost config GET+PUT, platform analytics overview + margin-by-plan, tenant domain-providers catalog/search/purchase (demo_registrar + Domain record created), admin domain-providers GET+PUT, workspaces list with is_current, sessions endpoint scrubs full session_token (only tail exposed), usage/me reads DB-defined trial limits with ai_minutes/calls/sms/ai_interactions metrics, RBAC 403 for tenant owner on all admin.* routes, and non-regression (health, 10 industries, countries/summary, tenants/me, conversations/start). 21/21 PASSED against the public preview URL on first clean run (after a trivial fix to the admin-login response shape expectation — /api/auth/login returns the user at the root, not nested under 'user').",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/plans", "issue": "Public endpoint filters by is_public=True, but the 'enterprise' plan is seeded with is_public=True by default (Plan model default) so it is leaked into the public pricing endpoint. Spec says enterprise is 'non-public'. Seed enterprise with is_public=False, or set it explicitly in DEFAULT_PLANS."},
+      {"endpoint": "PUT /api/admin/plans/{key}", "issue": "Uses PlanIn (same as create) — allows changing the 'key' field in the body; the path key wins because the $set uses the payload as-is but the match is by path. Low risk, but validate payload.key == path key, or drop key from the PUT body model."},
+      {"endpoint": "POST /api/tenants/domain-providers/purchase", "issue": "Creates a Domain row with no uniqueness check — purchasing the same domain twice creates duplicate rows. Add a (tenant_id, domain) unique index or upsert."},
+      {"endpoint": "GET /api/admin/plans/costs/current", "issue": "When no cost config exists yet, returns {'costs': {}, 'updated_at': None} without an 'id' field — inconsistent shape vs. after PUT. Minor."},
+      {"endpoint": "GET /api/auth/sessions", "issue": "Scrubbing of session_token is done field-by-field after mongo returns; safer to project it out at the find() call ({'session_token': 0}) so it never leaves the DB layer."},
+      {"endpoint": "POST /api/auth/switch", "issue": "Takes tenant_id as a query string param instead of a JSON body — asymmetric with other POSTs and awkward for frontend callers. Also does not emit a new user_sessions row (so /auth/sessions won't show the switch)."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_phase4.py",
+    "/app/test_reports/pytest/phase4_results.xml"
+  ],
+  "action_items": [
+    "Set is_public=False on the seeded 'enterprise' plan so /api/plans does not expose it.",
+    "Validate PUT /api/admin/plans/{key} payload key matches path key.",
+    "Add unique index / upsert for (tenant_id, domain) in db.domains, or dedupe on purchase.",
+    "Project out session_token in /api/auth/sessions at the DB query level.",
+    "Consider making /api/auth/switch accept a JSON body and record a new user_sessions row."
+  ],
+  "critical_code_review_comments": [
+    "plans.py: seed_plans is idempotent per-key but will NOT update existing seeded plans if DEFAULT_PLANS is changed later (by design). Document this.",
+    "platform_analytics.py: ai_attributed_revenue iterates ALL paid invoices into memory and matches on exact customer_phone — fine at low volume, but will not scale; also mismatches E.164 vs raw digits (normalize both sides).",
+    "domain_providers.py: DemoProvider marks .com available only when base length > 7, which is fine for the test query 'hearthhvac' (10 chars) — but means short brands always see .com unavailable. OK for demo; worth a comment.",
+    "usage.py: _get_plan_limits defaults to 'trial' when subscription_status != 'active' — matches spec. However, if plan_id is set but subscription_status is 'canceled', it still returns the canceled plan's limits; consider forcing trial for non-active states.",
+    "workspaces.py: /auth/workspaces is_current compares user row IDs (per-tenant user rows); correct, but switch_workspace mints a new access token WITHOUT revoking the previous one — token audit becomes partial.",
+    "RBAC consistently returns 403 (not 401) for authenticated non-admin users on admin routes — verified across plans, analytics, and domain-providers routers."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase4.py"
+  ],
+  "success_rate": {"backend": "100% (21/21)", "frontend": "not tested (backend-only)"},
+  "test_credentials": "Admin: ramonajefferson10@gmail.com / AdminPass123! (seeded). Owner: fresh TEST_ registration per module.",
+  "seed_data_creation": "Each run registers 1 TEST_ owner + onboarded hvac tenant, purchases 1 demo domain (hearthhvac<rand>.com) which creates 1 TEST domain row, tweaks the 'starter' plan sms limit to 999 and the cost_config ai_minutes to 7, and sets admin domain-providers default to manual then back to demo_registrar. The plan + cost mutations are not reverted — admin seeded values are stable across restarts since seed_plans is idempotent per-key. Reset manually if clean baselines are needed for Phase 5.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 1 (/app/backend/tests/backend_test.py), Phase 2 (test_phase2.py), and Phase 4 (test_phase4.py) suites together cover ~70 tests. Admin login response returns the user object at the ROOT (not nested under 'user'). /api/auth/switch takes tenant_id as a query param. /api/plans currently leaks the enterprise plan (is_public default = True); fix if a 'non-public enterprise' assertion is added later.",
+  "rca of the issue": "N/A — single assertion fix on login response shape; all other tests passed on first run."
+}

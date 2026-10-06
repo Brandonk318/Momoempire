@@ -13,7 +13,7 @@ export default function Billing() {
   const { user } = useAuth();
 
   useEffect(() => {
-    api.get("/payments/plans").then((r) => setPlans(r.data));
+    api.get("/plans").then((r) => setPlans(r.data));
     api.get("/tenants/me").then((r) => setTenant(r.data));
   }, []);
 
@@ -41,22 +41,34 @@ export default function Billing() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {plans.map((p) => (
-          <div key={p.id} className="surface p-7 lift" data-testid={`plan-card-${p.id}`}>
+        {plans.filter((p) => p.price_cents > 0 && p.key !== "enterprise").map((p) => (
+          <div key={p.key} className="surface p-7 lift" data-testid={`plan-card-${p.key}`}>
             <div className="overline">{p.name}</div>
-            <div className="font-display text-4xl mt-3 tracking-tight">${(p.amount / 100).toFixed(0)}<span className="text-base text-muted-foreground font-sans">/mo</span></div>
+            <div className="font-display text-4xl mt-3 tracking-tight">${(p.price_cents / 100).toFixed(0)}<span className="text-base text-muted-foreground font-sans">/mo</span></div>
+            {p.description && <div className="text-sm text-muted-foreground mt-2">{p.description}</div>}
             <ul className="mt-5 text-sm space-y-2 text-muted-foreground">
-              <li>· 1 location, {p.id === "scale" ? "unlimited" : p.id === "growth" ? "10" : "5"} users</li>
-              <li>· AI Employee + Business Advisor</li>
-              <li>· {p.id === "starter" ? "500" : p.id === "growth" ? "2,500" : "10,000"} AI minutes / mo</li>
-              <li>· Priority support ({p.id === "scale" ? "24/7" : p.id === "growth" ? "business hours" : "email"})</li>
+              {(p.features || []).slice(0, 6).map((f) => <li key={f}>· {f}</li>)}
+              {p.limits?.ai_minutes && <li>· {p.limits.ai_minutes} AI minutes/mo</li>}
             </ul>
-            <Button className="btn-tenant w-full mt-6" onClick={() => subscribe(p.id)} disabled={loading === p.id} data-testid={`plan-subscribe-${p.id}`}>
-              {loading === p.id ? "Redirecting…" : "Subscribe"}
+            <Button className="btn-tenant w-full mt-6" onClick={() => subscribe(p.key)} disabled={loading === p.key} data-testid={`plan-subscribe-${p.key}`}>
+              {loading === p.key ? "Redirecting…" : "Subscribe"}
             </Button>
           </div>
         ))}
       </div>
+
+      {plans.find((p) => p.key === "enterprise") && (
+        <div className="surface p-7 mt-5" data-testid="plan-card-enterprise">
+          <div className="flex items-start justify-between gap-6 flex-wrap">
+            <div>
+              <div className="overline">Enterprise</div>
+              <div className="font-display text-3xl mt-1">Custom pricing</div>
+              <div className="text-sm text-muted-foreground mt-2 max-w-xl">Custom AI minutes, locations, users, phone numbers, personas, integrations, and workflows. Fair-use policies apply.</div>
+            </div>
+            <Button variant="outline" asChild><a href="mailto:sales@aioffice.io">Contact sales</a></Button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-8 surface p-6 text-sm">
         <div className="overline mb-2">Tax</div>
