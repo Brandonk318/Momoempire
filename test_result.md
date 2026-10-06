@@ -198,3 +198,30 @@
       - working: "NA"
         agent: "main"
         comment: "Onboarding now loads enabled markets and lets the business select its country instead of silently defaulting every new tenant to the U.S."
+
+
+## backend:
+  - task: "First three niche Office profiles"
+    implemented: true
+    working: "NA"
+    file: "backend/niche_profiles.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added launch profiles for HVAC, plumbing, and pest control with niche office names, hero copy, CTAs, and four niche value propositions each. Industry API now exposes the profile data."
+
+## frontend:
+  - task: "Niche public storefront skins"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/PublicBusiness.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Public business pages now use the niche Office name, niche hero/tagline, niche CTA, and niche value-proposition cards for the first three launch verticals."
