@@ -223,12 +223,20 @@ async def receptionist_reply(tenant: dict, industry: dict | None, services: list
                              usage_capped: bool = False, upsells: list | None = None,
                              discount_policy: dict | None = None,
                              persona: dict | None = None,
-                             objections: list | None = None) -> Dict[str, Any]:
+                             objections: list | None = None,
+                             lang: str = "en") -> Dict[str, Any]:
     """Core receptionist loop — returns {reply, action, end}."""
     in_hours = is_within_hours(tenant.get("hours") or {})
     system = build_system_prompt(tenant, industry, services, knowledge, in_hours, usage_capped,
                                  upsells=upsells, discount_policy=discount_policy,
                                  persona=persona, objections=objections)
+    # Bilingual directive — appended so the base prompt stays untouched.
+    lang_key = (lang or "en").lower()
+    if lang_key.startswith("es"):
+        system += (
+            "\n\nLANGUAGE: Respond ONLY in natural, warm, conversational Spanish (es). "
+            "Translate names, service terms, and any English snippets. Keep tone identical to the English version."
+        )
 
     key = os.environ.get("EMERGENT_LLM_KEY")
     try:
@@ -246,26 +254,32 @@ async def receptionist_reply(tenant: dict, industry: dict | None, services: list
         return parse_ai_response(text)
     except Exception as e:
         # Deterministic fallback — never leave the caller at a dead end.
+        is_es = lang_key.startswith("es")
         lower = caller_utterance.lower()
-        if any(k in lower for k in ["book", "appointment", "schedule"]):
+        if any(k in lower for k in ["book", "appointment", "schedule", "cita", "reserv", "agenda"]):
             return {
-                "reply": "Happy to book that for you. Can I grab your name, phone, and the service you need?",
+                "reply": "Con gusto le reservo esa cita. ¿Me puede dar su nombre, teléfono y el servicio que necesita?" if is_es else
+                         "Happy to book that for you. Can I grab your name, phone, and the service you need?",
                 "action": None, "end": False,
             }
-        if any(k in lower for k in ["emergency", "urgent", "leak", "flood", "gas", "no heat"]):
+        if any(k in lower for k in ["emergency", "urgent", "leak", "flood", "gas", "no heat", "emergencia", "urgente", "fuga"]):
             return {
-                "reply": "That sounds urgent. I'm connecting you to a technician right now — please stay on the line.",
+                "reply": "Eso suena urgente. Le conecto con un técnico ahora mismo — por favor manténgase en la línea." if is_es else
+                         "That sounds urgent. I'm connecting you to a technician right now — please stay on the line.",
                 "action": {"type": "escalate_to_human", "payload": {"reason": "possible emergency",
                                                                   "callback_number": tenant.get("human_fallback_number", "")}},
                 "end": False,
             }
         if usage_capped or not in_hours:
             return {
-                "reply": "We're assisting another customer right now. If you'd like, I can take a quick message and we'll call you back shortly.",
+                "reply": "Estamos atendiendo a otro cliente ahora. Si gusta, tomo un mensaje y le devolvemos la llamada en breve." if is_es else
+                         "We're assisting another customer right now. If you'd like, I can take a quick message and we'll call you back shortly.",
                 "action": {"type": "take_voicemail", "payload": {"from_name": "", "from_phone": "", "summary": caller_utterance}},
                 "end": False,
             }
+        biz = tenant.get("name", "us")
         return {
-            "reply": f"Thanks for calling {tenant.get('name','us')}. I can help with booking, questions about our services, or taking a message. What would you like to do?",
+            "reply": f"Gracias por llamar a {biz}. Puedo ayudarle a reservar, responder preguntas sobre nuestros servicios, o tomar un mensaje. ¿Qué prefiere?" if is_es else
+                     f"Thanks for calling {biz}. I can help with booking, questions about our services, or taking a message. What would you like to do?",
             "action": None, "end": False,
         }

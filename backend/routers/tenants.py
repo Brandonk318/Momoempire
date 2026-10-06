@@ -1,5 +1,6 @@
 """Tenant (business) management: onboarding, settings, scoped resources."""
 from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
 from typing import List
 from db import get_db
 from models import (
@@ -105,6 +106,23 @@ async def update_my_tenant(data: TenantUpdate, user: dict = Depends(require_tena
     patch["updated_at"] = _now_iso()
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": patch})
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
+
+class LangIn(BaseModel):
+    lang: str
+
+
+@router.put("/me/language")
+async def set_my_language(data: LangIn, user: dict = Depends(require_tenant_user)):
+    """Set tenant preferred language (en|es). Also stored on the user."""
+    lang = (data.lang or "en").lower()
+    if lang not in ("en", "es"):
+        raise HTTPException(400, "Supported: en, es")
+    db = get_db()
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"lang": lang, "updated_at": _now_iso()}})
+    await db.users.update_one({"id": user["id"]}, {"$set": {"lang": lang}})
+    return {"ok": True, "lang": lang}
+
 
 
 # ---------- Services ----------

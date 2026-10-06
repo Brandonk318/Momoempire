@@ -48,3 +48,9 @@ crons:
     method: POST
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
     enabled: true
+  - name: repeat-reminders
+    description: "Daily scan of repeat schedules; send reminders in window and advance due dates"
+    cron: "30 13 * * *"
+    endpoint: "{{BASE_URL}}/api/cron/repeat-reminders"
+    method: POST
+    enabled: true

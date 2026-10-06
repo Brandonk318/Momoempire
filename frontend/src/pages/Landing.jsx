@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Logo } from "@/components/Logo";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -42,6 +44,7 @@ const FAQS = [
 ];
 
 export default function Landing() {
+  const { t } = useTranslation();
   const [trial, setTrial] = useState(null);
   const [openFaq, setOpenFaq] = useState(0);
   const [wlForm, setWlForm] = useState({ email: "", name: "", business_name: "", industry: "", note: "" });
@@ -87,8 +90,9 @@ export default function Landing() {
             <a href="#faq" className="hover:text-white">FAQ</a>
           </nav>
           <div className="flex items-center gap-2">
-            <Link to="/login"><Button variant="ghost" className="text-white hover:bg-white/10" data-testid="landing-login-btn">Log in</Button></Link>
-            <Link to="/signup"><Button className="bg-white text-black hover:bg-white/90" data-testid="landing-signup-btn">Try it free<ArrowRight className="h-4 w-4 ml-1" /></Button></Link>
+            <LanguageSwitcher compact />
+            <Link to="/login"><Button variant="ghost" className="text-white hover:bg-white/10" data-testid="landing-login-btn">{t("common.login")}</Button></Link>
+            <Link to="/signup"><Button className="bg-white text-black hover:bg-white/90" data-testid="landing-signup-btn">{t("landing.cta_trial")}<ArrowRight className="h-4 w-4 ml-1" /></Button></Link>
           </div>
         </div>
       </header>

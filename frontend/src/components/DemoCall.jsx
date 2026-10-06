@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { api, errMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ const INDUSTRIES = [
 ];
 
 export default function DemoCall() {
+  const { i18n } = useTranslation();
   const [industry, setIndustry] = useState("hvac");
   const [session, setSession] = useState(null);
   const [messages, setMessages] = useState([]); // {role,content}
@@ -29,7 +31,8 @@ export default function DemoCall() {
   const start = async (chosen) => {
     setStarting(true);
     try {
-      const { data } = await api.post("/public/demo/start", { industry: chosen || industry });
+      const lang = (i18n.language || "en").slice(0, 2);
+      const { data } = await api.post("/public/demo/start", { industry: chosen || industry, lang });
       setSession(data);
       setMessages([{ role: "ai", content: data.greeting }]);
     } catch (e) { toast.error(errMessage(e)); }
@@ -55,7 +58,7 @@ export default function DemoCall() {
     if (!SR) { toast.error("Your browser doesn't support voice input — type instead."); return; }
     if (listening) { try { recRef.current?.stop(); } catch (_) {} setListening(false); return; }
     const rec = new SR();
-    rec.lang = "en-US"; rec.continuous = false; rec.interimResults = false;
+    rec.lang = (i18n.language || "en").startsWith("es") ? "es-ES" : "en-US"; rec.continuous = false; rec.interimResults = false;
     rec.onresult = (e) => { const t = e.results[0][0].transcript; setInput(t); send(t); };
     rec.onend = () => setListening(false);
     rec.onerror = () => setListening(false);

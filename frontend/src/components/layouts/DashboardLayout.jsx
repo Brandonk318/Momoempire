@@ -1,11 +1,13 @@
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { Logo } from "@/components/Logo";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { useTranslation } from "react-i18next";
 import {
   Home, Bot, PhoneCall, MessageSquare, Target, Users, CalendarClock,
   Wrench, CreditCard, Globe, UserRound, Star, LineChart, Compass,
   BookOpenText, Workflow, Plug, PhoneForwarded, Gauge, Receipt, Settings,
-  LogOut, ShieldCheck, Rocket,
+  LogOut, ShieldCheck, Rocket, Repeat,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -14,64 +16,74 @@ import { api } from "@/lib/api";
 
 const GROUPS = [
   {
-    label: "Workspace",
+    label: "nav.workspace",
     items: [
-      { to: "/app", icon: Home, label: "Home", end: true, testId: "nav-home" },
-      { to: "/app/ai-employee", icon: Bot, label: "AI Employee", testId: "nav-ai-employee" },
+      { to: "/app", icon: Home, label: "nav.home", end: true, testId: "nav-home" },
+      { to: "/app/ai-employee", icon: Bot, label: "nav.ai_employee", testId: "nav-ai-employee" },
     ],
   },
   {
-    label: "Communications",
+    label: "nav.communications",
     items: [
-      { to: "/app/calls", icon: PhoneCall, label: "Calls", testId: "nav-calls" },
-      { to: "/app/messages", icon: MessageSquare, label: "Messages", testId: "nav-messages" },
+      { to: "/app/calls", icon: PhoneCall, label: "nav.calls", testId: "nav-calls" },
+      { to: "/app/messages", icon: MessageSquare, label: "nav.messages", testId: "nav-messages" },
     ],
   },
   {
-    label: "Business",
+    label: "nav.business",
     items: [
-      { to: "/app/leads", icon: Target, label: "Leads", testId: "nav-leads" },
-      { to: "/app/customers", icon: Users, label: "Customers", testId: "nav-customers" },
-      { to: "/app/appointments", icon: CalendarClock, label: "Appointments", testId: "nav-appointments" },
-      { to: "/app/services", icon: Wrench, label: "Services", testId: "nav-services" },
-      { to: "/app/payments", icon: CreditCard, label: "Payments", testId: "nav-payments" },
-      { to: "/app/website", icon: Globe, label: "Website", testId: "nav-website" },
-      { to: "/app/customer-portal", icon: UserRound, label: "Customer Portal", testId: "nav-customer-portal" },
-      { to: "/app/reviews", icon: Star, label: "Reviews", testId: "nav-reviews" },
+      { to: "/app/leads", icon: Target, label: "nav.leads", testId: "nav-leads" },
+      { to: "/app/customers", icon: Users, label: "nav.customers", testId: "nav-customers" },
+      { to: "/app/appointments", icon: CalendarClock, label: "nav.appointments", testId: "nav-appointments" },
+      { to: "/app/repeat", icon: Repeat, label: "nav.repeat", testId: "nav-repeat" },
+      { to: "/app/services", icon: Wrench, label: "nav.services", testId: "nav-services" },
+      { to: "/app/payments", icon: CreditCard, label: "nav.payments", testId: "nav-payments" },
+      { to: "/app/website", icon: Globe, label: "nav.website", testId: "nav-website" },
+      { to: "/app/customer-portal", icon: UserRound, label: "nav.customer_portal", testId: "nav-customer-portal" },
+      { to: "/app/reviews", icon: Star, label: "nav.reviews", testId: "nav-reviews" },
+      { to: "/app/testimonials", icon: Star, label: "nav.testimonials", testId: "nav-testimonials" },
     ],
   },
   {
-    label: "Intelligence",
+    label: "nav.intelligence",
     items: [
-      { to: "/app/analytics", icon: LineChart, label: "Analytics", testId: "nav-analytics" },
-      { to: "/app/advisor", icon: Compass, label: "Business Advisor", testId: "nav-advisor" },
-      { to: "/app/sales-intel", icon: Target, label: "Sales Intel", testId: "nav-sales-intel" },
-      { to: "/app/growth", icon: Rocket, label: "Growth", testId: "nav-growth" },
-      { to: "/app/knowledge", icon: BookOpenText, label: "Knowledge Base", testId: "nav-knowledge" },
+      { to: "/app/analytics", icon: LineChart, label: "nav.analytics", testId: "nav-analytics" },
+      { to: "/app/advisor", icon: Compass, label: "nav.advisor", testId: "nav-advisor" },
+      { to: "/app/sales-intel", icon: Target, label: "nav.sales_intel", testId: "nav-sales-intel" },
+      { to: "/app/growth", icon: Rocket, label: "nav.growth", testId: "nav-growth" },
+      { to: "/app/knowledge", icon: BookOpenText, label: "nav.knowledge", testId: "nav-knowledge" },
     ],
   },
   {
-    label: "Setup",
+    label: "nav.setup",
     items: [
-      { to: "/app/automations", icon: Workflow, label: "Automations", testId: "nav-automations" },
-      { to: "/app/integrations", icon: Plug, label: "Integrations", testId: "nav-integrations" },
-      { to: "/app/phone-numbers", icon: PhoneForwarded, label: "Phone Numbers", testId: "nav-phone-numbers" },
-      { to: "/app/usage", icon: Gauge, label: "Usage", testId: "nav-usage" },
-      { to: "/app/billing", icon: Receipt, label: "Billing", testId: "nav-billing" },
-      { to: "/app/settings", icon: Settings, label: "Settings", testId: "nav-settings" },
+      { to: "/app/automations", icon: Workflow, label: "nav.automations", testId: "nav-automations" },
+      { to: "/app/integrations", icon: Plug, label: "nav.integrations", testId: "nav-integrations" },
+      { to: "/app/phone-numbers", icon: PhoneForwarded, label: "nav.phone_numbers", testId: "nav-phone-numbers" },
+      { to: "/app/usage", icon: Gauge, label: "nav.usage", testId: "nav-usage" },
+      { to: "/app/billing", icon: Receipt, label: "nav.billing", testId: "nav-billing" },
+      { to: "/app/settings", icon: Settings, label: "nav.settings", testId: "nav-settings" },
     ],
   },
 ];
 
 export default function DashboardLayout({ children }) {
   const { user, logout } = useAuth();
+  const { t, i18n } = useTranslation();
   const location = useLocation();
   const [tenant, setTenant] = useState(null);
 
   useEffect(() => {
     if (!user?.tenant_id) return;
-    api.get("/tenants/me").then((r) => setTenant(r.data)).catch(() => {});
-  }, [user?.tenant_id, location.pathname]);
+    api.get("/tenants/me").then((r) => {
+      setTenant(r.data);
+      // Hydrate language preference from server-side tenant/user if set.
+      const serverLang = r.data?.lang || user?.lang;
+      if (serverLang && serverLang !== i18n.language) {
+        i18n.changeLanguage(serverLang).catch(() => {});
+      }
+    }).catch(() => {});
+  }, [user?.tenant_id, location.pathname, i18n, user?.lang]);
 
   // Apply tenant branding tokens to CSS vars
   useEffect(() => {
@@ -96,7 +108,7 @@ export default function DashboardLayout({ children }) {
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
           {GROUPS.map((g) => (
             <div key={g.label}>
-              <div className="px-2 overline mb-2">{g.label}</div>
+              <div className="px-2 overline mb-2">{t(g.label)}</div>
               <ul className="space-y-0.5">
                 {g.items.map((it) => {
                   const Icon = it.icon;
@@ -117,7 +129,7 @@ export default function DashboardLayout({ children }) {
                         }
                       >
                         <Icon className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{it.label}</span>
+                        <span className="truncate">{t(it.label)}</span>
                       </NavLink>
                     </li>
                   );
@@ -152,6 +164,9 @@ export default function DashboardLayout({ children }) {
         </div>
       </aside>
       <main className="flex-1 min-w-0">
+        <div className="flex items-center justify-end border-b border-border px-6 py-2 bg-card">
+          <LanguageSwitcher compact />
+        </div>
         {needsOnboarding && (
           <div className="border-b border-amber-200/70 bg-amber-50 text-amber-900 px-6 py-2 text-[13px] flex items-center justify-between">
             <span data-testid="onboarding-banner">Finish setting up your AI Office to unlock the full dashboard.</span>

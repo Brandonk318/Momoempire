@@ -154,3 +154,14 @@ async def cron_appt_confirmations(request: Request):
     from routers.phase9 import _run_appt_confirmations
     asyncio.create_task(_run_appt_confirmations())
     return {"accepted": True}
+
+
+
+@router.post("/repeat-reminders")
+async def cron_repeat_reminders(request: Request):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    if not _authorized(request):
+        raise HTTPException(401, "unauthorized")
+    from routers.repeat import run_repeat_reminders
+    asyncio.create_task(run_repeat_reminders())
+    return {"accepted": True}

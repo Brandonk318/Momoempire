@@ -22,6 +22,7 @@ import InviteAccept from "@/pages/InviteAccept";
 import ReferralLanding from "@/pages/ReferralLanding";
 import ReviewPublic from "@/pages/ReviewPublic";
 import AuthCallback from "@/pages/AuthCallback";
+import TestimonialConsent from "@/pages/TestimonialConsent";
 
 // Dashboard
 import Home from "@/pages/dashboard/Home";
@@ -47,6 +48,8 @@ import Integrations from "@/pages/dashboard/Integrations";
 import Automations from "@/pages/dashboard/Automations";
 import SalesIntel from "@/pages/dashboard/SalesIntel";
 import Growth from "@/pages/dashboard/Growth";
+import RepeatScheduling from "@/pages/dashboard/RepeatScheduling";
+import Testimonials from "@/pages/dashboard/Testimonials";
 
 // Admin
 import AdminOverview from "@/pages/admin/Overview";
@@ -88,6 +91,7 @@ function Router() {
       <Route path="/invite" element={<InviteAccept />} />
       <Route path="/r/:code" element={<ReferralLanding />} />
       <Route path="/reviews/:token" element={<ReviewPublic />} />
+      <Route path="/t/consent/:token" element={<TestimonialConsent />} />
       <Route path="/payment/success" element={<PaymentSuccess />} />
       <Route path="/payment/cancel" element={<PaymentCancel />} />
 
@@ -109,6 +113,8 @@ function Router() {
       <Route path="/app/advisor" element={<Protected><BusinessAdvisor /></Protected>} />
       <Route path="/app/sales-intel" element={<Protected><SalesIntel /></Protected>} />
       <Route path="/app/growth" element={<Protected><Growth /></Protected>} />
+      <Route path="/app/repeat" element={<Protected><RepeatScheduling /></Protected>} />
+      <Route path="/app/testimonials" element={<Protected><Testimonials /></Protected>} />
       <Route path="/app/knowledge" element={<Protected><KnowledgeBase /></Protected>} />
       <Route path="/app/automations" element={<Protected><Automations /></Protected>} />
       <Route path="/app/integrations" element={<Protected><Integrations /></Protected>} />

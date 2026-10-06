@@ -41,6 +41,7 @@ INDUSTRY_PRESETS = {
         "name": "Comfort Pros HVAC",
         "industry_slug": "hvac",
         "ai_employee": {"name": "Alex", "greeting": "Hi, Comfort Pros HVAC — how can I help?"},
+        "greeting_es": "Hola, Comfort Pros HVAC — ¿cómo le puedo ayudar?",
         "services": [
             {"name": "AC repair", "price": 189, "duration_minutes": 90},
             {"name": "Furnace tune-up", "price": 129, "duration_minutes": 60},
@@ -55,6 +56,7 @@ INDUSTRY_PRESETS = {
         "name": "Bright Smiles Dental",
         "industry_slug": "dental",
         "ai_employee": {"name": "Mia", "greeting": "Thanks for calling Bright Smiles Dental, how can I help?"},
+        "greeting_es": "Gracias por llamar a Bright Smiles Dental, ¿cómo le puedo ayudar?",
         "services": [
             {"name": "Cleaning", "price": 120, "duration_minutes": 45},
             {"name": "New patient exam", "price": 95, "duration_minutes": 60},
@@ -69,6 +71,7 @@ INDUSTRY_PRESETS = {
         "name": "Harbor Law Offices",
         "industry_slug": "legal",
         "ai_employee": {"name": "Jordan", "greeting": "Harbor Law Offices — this is Jordan, how can I help?"},
+        "greeting_es": "Harbor Law Offices — habla Jordan, ¿en qué le puedo ayudar?",
         "services": [
             {"name": "Initial consult", "price": 0, "duration_minutes": 30},
             {"name": "Estate planning package", "price": 1500, "duration_minutes": 90},
@@ -82,6 +85,7 @@ INDUSTRY_PRESETS = {
         "name": "Lumen Hair Studio",
         "industry_slug": "salon",
         "ai_employee": {"name": "Sam", "greeting": "Lumen Hair Studio — how can I help you glow today?"},
+        "greeting_es": "Lumen Hair Studio — ¿cómo le ayudamos a brillar hoy?",
         "services": [
             {"name": "Women's cut & style", "price": 85, "duration_minutes": 60},
             {"name": "Balayage", "price": 220, "duration_minutes": 180},
@@ -97,6 +101,7 @@ INDUSTRY_PRESETS = {
 
 class DemoStartIn(BaseModel):
     industry: str = "hvac"
+    lang: str = "en"
 
 
 class DemoTurnIn(BaseModel):
@@ -110,9 +115,11 @@ async def demo_start(data: DemoStartIn, request: Request):
         raise HTTPException(429, "Too many demo sessions — slow down a bit.")
     preset = INDUSTRY_PRESETS.get((data.industry or "hvac").lower()) or INDUSTRY_PRESETS["hvac"]
     sid = _uuid()
-    greeting = preset["ai_employee"]["greeting"]
+    lang = (data.lang or "en").lower()
+    greeting = preset.get("greeting_es") if lang.startswith("es") else preset["ai_employee"]["greeting"]
     _SESSIONS[sid] = {
         "preset": preset,
+        "lang": lang,
         "history": [{"role": "ai", "content": greeting}],
         "turns": 0,
         "created_at": time.time(),
@@ -123,7 +130,7 @@ async def demo_start(data: DemoStartIn, request: Request):
         if now - _SESSIONS[k]["created_at"] > 1800:
             _SESSIONS.pop(k, None)
     return {"session_id": sid, "greeting": greeting, "business": preset["name"],
-            "ai_name": preset["ai_employee"]["name"], "max_turns": _MAX_TURNS}
+            "ai_name": preset["ai_employee"]["name"], "max_turns": _MAX_TURNS, "lang": lang}
 
 
 @router.post("/demo/turn")
@@ -133,8 +140,10 @@ async def demo_turn(data: DemoTurnIn, request: Request):
     sess = _SESSIONS.get(data.session_id)
     if not sess:
         raise HTTPException(404, "Demo session expired — start a new one.")
+    is_es = (sess.get("lang") or "en").startswith("es")
     if sess["turns"] >= _MAX_TURNS:
-        return {"reply": "That's a wrap on the demo. Start a free trial to keep chatting — your real AI office waits.", "ended": True}
+        return {"reply": "Fin de la demo. Comience la prueba gratis para seguir conversando — su oficina AI real le espera." if is_es else
+                         "That's a wrap on the demo. Start a free trial to keep chatting — your real AI office waits.", "ended": True}
     text = (data.text or "").strip()
     if not text:
         raise HTTPException(400, "text required")
@@ -149,10 +158,11 @@ async def demo_turn(data: DemoTurnIn, request: Request):
             history=sess["history"][-20:],
             caller_utterance=text,
             upsells=[],
+            lang=sess.get("lang", "en"),
         )
     except Exception as e:
         return {"reply": f"Hmm, I had a glitch there — try again. ({e})", "ended": False}
-    reply = ai.get("reply") or "Sorry, could you repeat that?"
+    reply = ai.get("reply") or ("Perdón, ¿podría repetir?" if is_es else "Sorry, could you repeat that?")
     sess["history"].append({"role": "ai", "content": reply})
     sess["turns"] += 1
     return {"reply": reply, "turns_used": sess["turns"], "turns_left": _MAX_TURNS - sess["turns"], "ended": False}

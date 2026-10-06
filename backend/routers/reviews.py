@@ -80,4 +80,18 @@ async def submit_review(token: str, data: ReviewSubmit):
             "responded_at": datetime.now(timezone.utc).isoformat(),
         }},
     )
+    # Auto-convert 5-star reviews into testimonials (consent-first flow).
+    if data.rating >= 5:
+        try:
+            from routers.testimonials import start_testimonial_flow
+            await start_testimonial_flow(r["tenant_id"], {
+                "id": r.get("id") or token,
+                "customer_name": r.get("customer_name"),
+                "customer_email": r.get("customer_email"),
+                "customer_phone": r.get("customer_phone"),
+                "rating": data.rating,
+                "text": data.comment or "",
+            })
+        except Exception as e:
+            print(f"[REVIEW->TESTIMONIAL] {e}")
     return {"status": "ok"}
