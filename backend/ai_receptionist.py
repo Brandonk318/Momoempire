@@ -45,7 +45,9 @@ def _bullet_list(items: List[Any], max_items: int = 20) -> str:
 
 def build_system_prompt(tenant: dict, industry: dict | None, services: list, knowledge: list,
                         in_hours: bool, usage_capped: bool, upsells: list | None = None,
-                        discount_policy: dict | None = None) -> str:
+                        discount_policy: dict | None = None,
+                        persona: dict | None = None,
+                        objections: list | None = None) -> str:
     ai = tenant.get("ai_employee") or {}
     name = ai.get("name") or "Alex"
     personality = ai.get("personality") or "Warm, professional, concise."
@@ -94,6 +96,24 @@ def build_system_prompt(tenant: dict, industry: dict | None, services: list, kno
             f"- Script: {phrase or 'I can offer a one-time discount if we book today.'}\n"
             f"- Only ever offer ONCE per call. Log it in the booking notes."
         )
+
+    persona_block = ""
+    if persona:
+        key = (persona.get("key") or "receptionist").lower()
+        tone_map = {
+            "receptionist": "Friendly and brisk. Books jobs, takes messages, keeps replies short.",
+            "sales_pro": "Consultative sales professional. Qualifies the lead (budget, timeline, decision-maker), highlights value, closes with a soft urgency.",
+            "industry_expert": "Technically fluent industry expert. Uses correct terminology, cites relevant specs, and builds trust before suggesting next steps.",
+        }
+        tone = (persona.get("custom_tone") or "").strip() or tone_map.get(key, tone_map["receptionist"])
+        persona_block = f"Persona mode: {key}\nAdopted tone: {tone}"
+
+    objection_block = ""
+    if objections:
+        lines = []
+        for o in objections[:20]:
+            lines.append(f"- When caller says ~ \"{o.get('pattern')}\" → respond: \"{o.get('rebuttal')}\"")
+        objection_block = "Objection playbook (use the matching rebuttal if the caller voices one of these):\n" + "\n".join(lines)
 
     hours_block = ""
     if tenant.get("hours"):
@@ -164,6 +184,10 @@ Upsell suggestions (offer naturally when the caller books or asks about a matchi
 
 {discount_block or ''}
 
+{persona_block or ''}
+
+{objection_block or ''}
+
 {chr(10).join(ind_bits)}
 
 {tools_doc}
@@ -197,11 +221,14 @@ def parse_ai_response(text: str) -> Dict[str, Any]:
 async def receptionist_reply(tenant: dict, industry: dict | None, services: list,
                              knowledge: list, history: list, caller_utterance: str,
                              usage_capped: bool = False, upsells: list | None = None,
-                             discount_policy: dict | None = None) -> Dict[str, Any]:
+                             discount_policy: dict | None = None,
+                             persona: dict | None = None,
+                             objections: list | None = None) -> Dict[str, Any]:
     """Core receptionist loop — returns {reply, action, end}."""
     in_hours = is_within_hours(tenant.get("hours") or {})
     system = build_system_prompt(tenant, industry, services, knowledge, in_hours, usage_capped,
-                                 upsells=upsells, discount_policy=discount_policy)
+                                 upsells=upsells, discount_policy=discount_policy,
+                                 persona=persona, objections=objections)
 
     key = os.environ.get("EMERGENT_LLM_KEY")
     try:

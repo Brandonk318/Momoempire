@@ -80,6 +80,12 @@ export default function Website() {
               </ul>
             )}
           </div>
+          <div className="surface p-6">
+            <div className="overline mb-3">Embed widget</div>
+            <p className="text-xs text-muted-foreground mb-3">Paste this one-liner on any website — it adds a floating "Talk to {tenant.name}" chat/lead-capture button in your brand color.</p>
+            <code className="block text-[11px] bg-muted rounded p-3 font-mono break-all" data-testid="embed-snippet">{`<script src="${window.location.origin}/api/public/widget/${tenant.slug}.js" defer></script>`}</code>
+            <Button variant="outline" size="sm" className="mt-3" onClick={() => { navigator.clipboard.writeText(`<script src="${window.location.origin}/api/public/widget/${tenant.slug}.js" defer></script>`); toast.success("Snippet copied"); }} data-testid="embed-copy-btn"><Copy className="h-3 w-3 mr-1" />Copy snippet</Button>
+          </div>
         </aside>
       </div>
     </div>

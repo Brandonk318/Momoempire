@@ -6,6 +6,13 @@ crons:
     method: POST
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
     enabled: true
+  - name: appt-reminders
+    description: "Send 24h-before SMS reminders for upcoming appointments"
+    cron: "15 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/appointment-reminders"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
   - name: overage-nightly
     description: "Compute and charge per-tenant overage every night at 02:30 UTC"
     cron: "30 2 * * *"

@@ -73,11 +73,14 @@ async def voice_turn(request: Request, conv_id: str):
     knowledge = await db.knowledge.find({"tenant_id": conv["tenant_id"]}, {"_id": 0}).to_list(200)
     upsells = await db.upsells.find({"tenant_id": conv["tenant_id"]}, {"_id": 0}).to_list(100)
     policy = await db.discount_policies.find_one({"tenant_id": conv["tenant_id"]}, {"_id": 0})
+    persona = await db.ai_personas.find_one({"tenant_id": conv["tenant_id"]}, {"_id": 0})
+    objections = await db.objections.find({"tenant_id": conv["tenant_id"]}, {"_id": 0}).to_list(100)
     history = await db.conv_messages.find({"conversation_id": conv_id}, {"_id": 0}).sort("created_at", 1).to_list(50)
     capped = await usage_capped(conv["tenant_id"], "ai_interactions")
 
     ai = await receptionist_reply(tenant or {}, industry, services, knowledge, history, speech or "",
-                                  usage_capped=capped, upsells=upsells, discount_policy=policy)
+                                  usage_capped=capped, upsells=upsells, discount_policy=policy,
+                                  persona=persona, objections=objections)
     reply = ai.get("reply", "Sorry, I didn't catch that.")
     await db.conv_messages.insert_one(ConvMessage(conversation_id=conv_id, tenant_id=conv["tenant_id"],
                                                  role="ai", content=reply, action=ai.get("action")).model_dump())
@@ -113,8 +116,12 @@ async def sms_incoming(request: Request):
     knowledge = await db.knowledge.find({"tenant_id": tenant["id"]}, {"_id": 0}).to_list(200)
     upsells = await db.upsells.find({"tenant_id": tenant["id"]}, {"_id": 0}).to_list(100)
     policy = await db.discount_policies.find_one({"tenant_id": tenant["id"]}, {"_id": 0})
+    persona = await db.ai_personas.find_one({"tenant_id": tenant["id"]}, {"_id": 0})
+    objections = await db.objections.find({"tenant_id": tenant["id"]}, {"_id": 0}).to_list(100)
     history = await db.conv_messages.find({"conversation_id": thread["id"]}, {"_id": 0}).sort("created_at", 1).to_list(50)
-    ai = await receptionist_reply(tenant, industry, services, knowledge, history, body, upsells=upsells, discount_policy=policy)
+    ai = await receptionist_reply(tenant, industry, services, knowledge, history, body,
+                                  upsells=upsells, discount_policy=policy,
+                                  persona=persona, objections=objections)
     reply = (ai.get("reply") or "").replace("<", " ")[:1500]
     await db.conv_messages.insert_one(ConvMessage(conversation_id=thread["id"], tenant_id=tenant["id"],
                                                  role="ai", content=reply, action=ai.get("action")).model_dump())

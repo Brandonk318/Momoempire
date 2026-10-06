@@ -54,6 +54,41 @@ async def _run_overage_nightly():
             print(f"[CRON OVERAGE] tenant {t.get('id')} failed: {e}")
 
 
+async def _run_appointment_reminders():
+    """Send SMS reminders for appointments 20-28 hours away (idempotent per appointment)."""
+    from datetime import datetime, timezone, timedelta
+    from services.twilio import send_sms
+    db = get_db()
+    now = datetime.now(timezone.utc)
+    window_start = (now + timedelta(hours=20)).isoformat()
+    window_end = (now + timedelta(hours=28)).isoformat()
+    appts = await db.appointments.find(
+        {"status": {"$in": ["scheduled", "confirmed"]},
+         "start_at": {"$gte": window_start, "$lte": window_end},
+         "reminder_sent_at": {"$exists": False}},
+        {"_id": 0},
+    ).to_list(1000)
+    for a in appts:
+        if not a.get("customer_phone"):
+            continue
+        tenant = await db.tenants.find_one({"id": a["tenant_id"]}, {"_id": 0, "name": 1}) or {}
+        autom = await db.automation_settings.find_one({"tenant_id": a["tenant_id"]}, {"_id": 0}) or {}
+        template = autom.get("reminder_sms_template") or "Hi {name}, reminder for your {service} appointment on {time}. Reply C to confirm."
+        when = a.get("start_at", "")
+        body = template.format(name=a.get("customer_name", "there"),
+                              service=a.get("service_name") or "appointment",
+                              time=when[:16].replace("T", " "))
+        try:
+            res = await send_sms(tenant_id=a["tenant_id"], to=a["customer_phone"], body=body)
+            await db.appointments.update_one(
+                {"id": a["id"]},
+                {"$set": {"reminder_sent_at": _now_iso(), "reminder_status": res.get("status")}},
+            )
+            print(f"[CRON APPT-REMINDER->{a['customer_phone']}] {body}")
+        except Exception as e:
+            print(f"[CRON APPT-REMINDER] failed for {a.get('id')}: {e}")
+
+
 @router.post("/followups")
 async def cron_followups(request: Request):
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
@@ -79,4 +114,13 @@ async def cron_weekly_digest(request: Request):
         raise HTTPException(401, "unauthorized")
     from routers.growth import _send_digest_to_all
     asyncio.create_task(_send_digest_to_all())
+    return {"accepted": True}
+
+
+@router.post("/appointment-reminders")
+async def cron_appointment_reminders(request: Request):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    if not _authorized(request):
+        raise HTTPException(401, "unauthorized")
+    asyncio.create_task(_run_appointment_reminders())
     return {"accepted": True}

@@ -139,6 +139,21 @@ export default function Calls() {
     } catch (e) { toast.error(errMessage(e)); }
   };
 
+  const [coachOpen, setCoachOpen] = useState(false);
+  const [coachLines, setCoachLines] = useState([]);
+  const [coachLoading, setCoachLoading] = useState(false);
+  const askCoach = async () => {
+    if (!active) return;
+    setCoachLoading(true);
+    try {
+      const transcript = messages.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n").slice(-4000);
+      const { data } = await api.post("/sales/coach", { transcript, scenario: "general" });
+      setCoachLines(data.suggestions || []);
+      setCoachOpen(true);
+    } catch (e) { toast.error(errMessage(e)); }
+    finally { setCoachLoading(false); }
+  };
+
   const toggleMic = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { toast.error("Mic unsupported in this browser — type instead"); return; }
@@ -201,10 +216,27 @@ export default function Calls() {
                       <Button size="sm" variant="outline" onClick={extractFields} disabled={extracting} data-testid="extract-fields-btn"><Sparkles className="h-3.5 w-3.5 mr-1" />{extracting ? "Reading…" : "Auto-fill CRM"}</Button>
                     </>
                   )}
+                  <Button size="sm" variant="outline" onClick={askCoach} disabled={coachLoading} data-testid="coach-btn"><Sparkles className="h-3.5 w-3.5 mr-1" />{coachLoading ? "Thinking…" : "Coach me"}</Button>
                   {active.status === "active" && <Button variant="outline" onClick={endCall} data-testid="end-call-btn"><PhoneOff className="h-4 w-4 mr-1" />End call</Button>}
                 </div>
               </header>
               <div className="flex-1 overflow-y-auto p-5 space-y-3" data-testid="call-transcript">
+                {coachOpen && coachLines.length > 0 && (
+                  <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-3 mb-3" data-testid="coach-panel">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs font-medium"><Sparkles className="h-3.5 w-3.5" />Coach · suggested next lines</div>
+                      <button className="text-[11px] text-muted-foreground" onClick={() => setCoachOpen(false)}>dismiss</button>
+                    </div>
+                    <ul className="mt-2 space-y-1">
+                      {coachLines.map((l, i) => (
+                        <li key={i} className="text-[13px] rounded bg-white border border-indigo-100 px-2.5 py-1.5 cursor-pointer hover:bg-indigo-50" onClick={() => { setInput(l); setCoachOpen(false); }} data-testid={`coach-line-${i}`}>
+                          "{l}"
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="text-[11px] text-muted-foreground mt-2">Click a line to drop it into your reply box.</div>
+                  </div>
+                )}
                 {extracted && (
                   <div className="rounded-xl border border-border bg-amber-50/40 p-3 mb-3" data-testid="extracted-panel">
                     <div className="flex items-center gap-2 text-xs font-medium">

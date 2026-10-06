@@ -1,0 +1,43 @@
+{
+  "summary": "Phase 6 full-stack testing complete. 20/20 backend pytest cases (test_phase6.py) PASSED and all 8 frontend UI assertions PASSED. Backend: Twilio voice/sms/missed-call webhooks (unresolved number → friendly TwiML/empty Response/ignored:true, completed CallStatus → ignored:true); discount-policy GET defaults + PUT persistence; realtime/token returns {available:false, fallback:'web-speech'} without OPENAI_API_KEY; growth/digest/preview returns stats+highlights+tenant_name; growth/digest/send falls back to current user email → status sent/logged with to==user email; winback/preview returns eligible+sample; winback/run dry_run=true returns sent:0 + campaign_id, dry_run:false logs campaign retrievable via /growth/campaigns; referrals issue returns 8-char code + id, list shows it, public /r/{code}/visit returns referrer+business, /convert returns {ok:true}, counters increment, unknown code → 404; cron/weekly-digest 401 without auth + 200 {accepted:true} with Bearer WEBHOOK_CRON_SECRET; AI receptionist conversation with competing-quote caller-turn returns {reply,...} (discount policy injected into system prompt without crash); invitations create 200. Frontend: /pricing renders pricing-page; /app/growth renders growth-page + all three tab triggers (digest/winback/referrals); winback tab exposes winback-days, winback-channel-sms, winback-message, winback-preview-btn; dashboard sidebar has nav-growth; /app/sales-intel renders new 4th tab sales-tab-discount with discount-tab containing all 6 expected fields (enabled, max-pct, max-cents, phrase, conditions, save); public /r/{CODE} renders referral-landing + referral-continue-btn.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/sales/discount-policy", "issue": "When no policy row exists, returns an inline default dict with tenant_id injected but WITHOUT 'updated_at' field — asymmetric shape vs after PUT. Frontend should still work since field is optional. Low priority cosmetic."},
+      {"endpoint": "POST /api/growth/winback/run (dry_run=false)", "issue": "The query filter `{\"phone\": {\"$exists\": True, \"$ne\": \"\"}}` iterates ALL customers with a phone (not just inactive ones) when dry_run=false — this is INCONSISTENT with /winback/preview which honors days_inactive. On a tenant with real inactive customers this would blast everyone with a phone number, not just the eligible cohort. Fix: reuse the preview query (cutoff on last_contacted_at / created_at) for the real-run branch as well."},
+      {"endpoint": "POST /api/twilio/missed-call", "issue": "Response for ignored events returns {\"ignored\":true} (dict), but for the successful send path returns {\"status\":..., \"textback\":...} — inconsistent response schema. Non-breaking since Twilio ignores body."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase6.py",
+    "/app/test_reports/pytest/phase6_results.xml"
+  ],
+  "action_items": [
+    "Fix winback/run real-run branch to also apply the days_inactive cutoff (currently blasts every customer with phone/email).",
+    "Minor: unify missed-call response shape and discount-policy default-vs-persisted shape (optional)."
+  ],
+  "critical_code_review_comments": [
+    "growth.py:winback_run — real-run DB query does NOT filter by inactivity cutoff (bug noted above); it also loads up to 2000 customers into memory and sends serially inside the request handler, which will time out on large tenants. Move to BackgroundTasks + batched sending.",
+    "growth.py:issue_referral — code is 8 hex chars from uuid4(); collision probability is low but there is no uniqueness check or retry on duplicate — add a unique index on referrals.code or re-roll on duplicate.",
+    "growth.py:_send_digest_to_all is called from cron via asyncio.create_task without any locking — two overlapping cron ticks would double-send. Add an idempotency key (week number + tenant_id) in a 'digest_sends' collection.",
+    "twilio_webhook.py:voice_turn — fully synchronous AI call per Twilio turn; Twilio enforces a 15s TwiML timeout and the LLM alone can take 3–8s. On a slow turn Twilio will retry and create duplicate conv_messages. Add turn-level idempotency on CallSid+turn index.",
+    "sales_extra.py:realtime_token — on OpenAI error returns the raw r.text[:200] as 'reason' to the client; leaks upstream error details. Log server-side instead and return a generic 'upstream_error'.",
+    "sales_extra.py:get_policy — returns inline default without upserting, so UI shows unsaved state as if saved. Harmless but confusing; UX improvement: show 'Not configured yet' state.",
+    "cron.py — all three cron handlers fire-and-forget asyncio.create_task; if the process is restarted mid-task the work is lost silently. Fine for an MVP, worth noting."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase6.py"
+  ],
+  "success_rate": {"backend": "100% (20/20)", "frontend": "100% (8/8 UI assertions)"},
+  "test_credentials": "Admin: ramonajefferson10@gmail.com / AdminPass123! (not used — Phase 6 endpoints are tenant-scoped). Each run registers fresh TEST_P6_* and TEST_UI_* tenant owners (plumbing industry) with password testpass123.",
+  "seed_data_creation": "Per run: 2 TEST_P6_* / TEST_UI_* tenants + 1 referral code per tenant + 1 winback campaign log + 1 discount policy row + 1 pending invitation. All test data is prefixed TEST_ for easy cleanup.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All Phase 6 endpoints green. The only true functional defect is in growth.winback_run (real-run path ignores days_inactive). WEBHOOK_CRON_SECRET lives in /app/backend/.env; cron endpoints require Bearer prefix. Referral codes are 8-hex-upper. For frontend referral landing tests, create a code via POST /api/growth/referrals/issue after login — public /r/{code} route works in a fresh browser context without auth.",
+  "rca of the issue": "N/A — no breaking failures. The only concrete bug (winback_run missing inactivity filter) is reported above with a one-liner fix: in the real-run branch, replace the ad-hoc channel-only filter with the same {$or: [last_contacted_at <= cutoff, {last_contacted_at:$exists:false, created_at<=cutoff}]} filter used in winback_preview, plus the channel field existence check."
+}

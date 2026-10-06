@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Flame, Snowflake, ThermometerSun, Plus, Trash2, Pencil, Clock, PlayCircle, Scissors } from "lucide-react";
+import { Flame, Snowflake, ThermometerSun, Plus, Trash2, Pencil, Clock, PlayCircle, Scissors, Sparkles, Code2, Bot } from "lucide-react";
 
 const LABEL_COLOR = {
   hot: "bg-rose-100 text-rose-900",
@@ -223,19 +223,125 @@ function FollowupsTab() {
 export default function SalesIntel() {
   return (
     <div data-testid="sales-intel-page">
-      <PageHeader eyebrow="Intelligence" title="Sales intelligence" description="Scored leads, upsell library, follow-up cadence, and beat-the-quote guardrails." />
+      <PageHeader eyebrow="Intelligence" title="Sales intelligence" description="Scored leads, upsells, cadence, discount guardrails, and your AI employee's expertise." />
       <Tabs defaultValue="scored">
         <TabsList>
           <TabsTrigger value="scored" data-testid="sales-tab-scored">Hot / warm / cold</TabsTrigger>
           <TabsTrigger value="upsells" data-testid="sales-tab-upsells">Upsells</TabsTrigger>
           <TabsTrigger value="followups" data-testid="sales-tab-followups">Follow-ups</TabsTrigger>
           <TabsTrigger value="discount" data-testid="sales-tab-discount">Beat the quote</TabsTrigger>
+          <TabsTrigger value="expert" data-testid="sales-tab-expert">Expert mode</TabsTrigger>
         </TabsList>
         <TabsContent value="scored"><ScoredLeadsTab /></TabsContent>
         <TabsContent value="upsells"><UpsellsTab /></TabsContent>
         <TabsContent value="followups"><FollowupsTab /></TabsContent>
         <TabsContent value="discount"><DiscountTab /></TabsContent>
+        <TabsContent value="expert"><ExpertTab /></TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function PersonaPicker() {
+  const [p, setP] = useState(null);
+  const presets = [
+    { key: "receptionist", label: "Receptionist", desc: "Friendly, brisk. Books jobs, takes messages." },
+    { key: "sales_pro", label: "Sales Pro", desc: "Qualifies, highlights value, closes with urgency." },
+    { key: "industry_expert", label: "Industry Expert", desc: "Technically fluent, uses industry terms." },
+  ];
+  useEffect(() => { api.get("/sales/persona").then((r) => setP(r.data)); }, []);
+  const save = async (key) => {
+    try { const { data } = await api.put("/sales/persona", { key, custom_tone: p?.custom_tone || "" }); setP({ ...p, ...data }); toast.success(`Persona set to ${key}`); } catch (e) { toast.error(errMessage(e)); }
+  };
+  if (!p) return null;
+  return (
+    <div className="surface p-6" data-testid="persona-picker">
+      <div className="overline mb-3"><Bot className="h-3.5 w-3.5 inline mr-1" />Persona depth</div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {presets.map((pr) => (
+          <button key={pr.key} onClick={() => save(pr.key)} data-testid={`persona-${pr.key}`}
+            className={`text-left rounded-lg border p-4 transition ${p.key === pr.key ? "border-foreground bg-foreground/5" : "border-border hover:bg-muted"}`}>
+            <div className="font-medium">{pr.label}</div>
+            <div className="text-[12px] text-muted-foreground mt-1">{pr.desc}</div>
+            {p.key === pr.key && <div className="text-[11px] text-emerald-700 mt-2 font-mono">active</div>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ObjectionLibrary() {
+  const [list, setList] = useState([]);
+  const [form, setForm] = useState({ pattern: "", rebuttal: "" });
+  const load = () => api.get("/sales/objections").then((r) => setList(r.data));
+  useEffect(() => { load(); }, []);
+  const save = async () => {
+    try { await api.post("/sales/objections", { pattern: form.pattern, rebuttal: form.rebuttal, tags: [] }); setForm({ pattern: "", rebuttal: "" }); load(); toast.success("Added"); } catch (e) { toast.error(errMessage(e)); }
+  };
+  const del = async (id) => { try { await api.delete(`/sales/objections/${id}`); load(); } catch (e) { toast.error(errMessage(e)); } };
+  return (
+    <div className="surface p-6" data-testid="objection-library">
+      <div className="overline mb-3">Objection playbook</div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+        <Input placeholder="Caller says... (e.g. too expensive)" value={form.pattern} onChange={(e) => setForm({ ...form, pattern: e.target.value })} data-testid="objection-pattern" />
+        <div className="flex gap-2">
+          <Input placeholder="AI responds..." value={form.rebuttal} onChange={(e) => setForm({ ...form, rebuttal: e.target.value })} data-testid="objection-rebuttal" />
+          <Button className="btn-tenant" onClick={save} disabled={!form.pattern || !form.rebuttal} data-testid="objection-save"><Plus className="h-3.5 w-3.5" /></Button>
+        </div>
+      </div>
+      <ul className="divide-y divide-border">
+        {list.map((o) => (
+          <li key={o.id} className="py-3 flex gap-3" data-testid={`objection-${o.id}`}>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-mono text-muted-foreground">if caller says ≈ "{o.pattern}"</div>
+              <div className="text-sm mt-0.5">"{o.rebuttal}"</div>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => del(o.id)} data-testid={`objection-del-${o.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
+          </li>
+        ))}
+        {list.length === 0 && <li className="py-6 text-sm text-muted-foreground text-center">No objections yet. The AI will fall back to open-ended discovery.</li>}
+      </ul>
+    </div>
+  );
+}
+
+function QuoteEstimator() {
+  const [desc, setDesc] = useState("");
+  const [notes, setNotes] = useState("");
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const run = async () => {
+    setLoading(true);
+    try { const { data } = await api.post("/sales/quote-estimate", { service_description: desc, customer_notes: notes }); setResult(data); } catch (e) { toast.error(errMessage(e)); }
+    finally { setLoading(false); }
+  };
+  return (
+    <div className="surface p-6" data-testid="quote-estimator">
+      <div className="overline mb-3"><Sparkles className="h-3.5 w-3.5 inline mr-1" />Instant quote estimator</div>
+      <div className="space-y-3">
+        <Input placeholder="What does the customer want? (e.g. replace central AC)" value={desc} onChange={(e) => setDesc(e.target.value)} data-testid="quote-desc" />
+        <Input placeholder="Any notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <Button className="btn-tenant" onClick={run} disabled={!desc || loading} data-testid="quote-run">{loading ? "Estimating…" : "Get ballpark"}</Button>
+      </div>
+      {result && (
+        <div className="mt-4 rounded-lg border border-border p-4" data-testid="quote-result">
+          <div className="font-display text-2xl">${result.low} – ${result.high}</div>
+          <div className="text-[11px] text-muted-foreground">confidence: {result.confidence} · method: {result.method}</div>
+          <p className="text-sm mt-2">{result.rationale}</p>
+          {result.disclaimer && <p className="text-[11px] text-muted-foreground italic mt-2">{result.disclaimer}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExpertTab() {
+  return (
+    <div className="space-y-5" data-testid="expert-tab">
+      <PersonaPicker />
+      <ObjectionLibrary />
+      <QuoteEstimator />
     </div>
   );
 }

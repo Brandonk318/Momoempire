@@ -151,10 +151,20 @@ async def winback_run(data: WinBackIn, user: dict = Depends(require_tenant_owner
     preview = await winback_preview(data, user)
     results = {"attempted": 0, "sent": 0, "dry_run": data.dry_run, "channel": data.channel}
     campaign_id = _uuid()
-    for c in preview["sample"] if data.dry_run else (await db.customers.find({
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=data.days_inactive)).isoformat()
+    base_q = {
         "tenant_id": user["tenant_id"],
-        **({"phone": {"$exists": True, "$ne": ""}} if data.channel == "sms" else {"email": {"$exists": True, "$ne": ""}}),
-    }, {"_id": 0}).to_list(2000)):
+        "$or": [
+            {"last_contacted_at": {"$lte": cutoff}},
+            {"last_contacted_at": {"$exists": False}, "created_at": {"$lte": cutoff}},
+        ],
+    }
+    if data.channel == "sms":
+        base_q["phone"] = {"$exists": True, "$ne": ""}
+    else:
+        base_q["email"] = {"$exists": True, "$ne": ""}
+    recipients = preview["sample"] if data.dry_run else await db.customers.find(base_q, {"_id": 0}).to_list(2000)
+    for c in recipients:
         results["attempted"] += 1
         body = data.message.format(name=c.get("name") or "there", business=tenant.get("name", "us"))
         if data.dry_run:

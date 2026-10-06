@@ -45,6 +45,8 @@ from routers.cron import router as cron_router
 from routers.twilio_webhook import router as twilio_router
 from routers.growth import router as growth_router, public_referrals as public_referrals_router
 from routers.sales_extra import router as sales_extra_router, realtime as realtime_router
+from routers.sales_expert import router as sales_expert_router
+from routers.widget import router as widget_router
 
 app = FastAPI(title="AI Office Platform API")
 api = APIRouter(prefix="/api")
@@ -112,6 +114,8 @@ api.include_router(growth_router)
 api.include_router(public_referrals_router)
 api.include_router(sales_extra_router)
 api.include_router(realtime_router)
+api.include_router(sales_expert_router)
+api.include_router(widget_router)
 # Stripe is registered to deliver webhooks to /api/stripe/webhook (top-level).
 api.add_api_route("/stripe/webhook", _stripe_wh, methods=["POST"], include_in_schema=False)
 
