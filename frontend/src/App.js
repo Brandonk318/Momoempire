@@ -7,6 +7,7 @@ import AdminLayout from "@/components/layouts/AdminLayout";
 
 // Public
 import Landing from "@/pages/Landing";
+import Pricing from "@/pages/Pricing";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import ForgotPassword from "@/pages/ForgotPassword";
@@ -42,6 +43,7 @@ import CustomerPortal from "@/pages/dashboard/CustomerPortal";
 import PhoneNumbers from "@/pages/dashboard/PhoneNumbers";
 import Integrations from "@/pages/dashboard/Integrations";
 import Automations from "@/pages/dashboard/Automations";
+import SalesIntel from "@/pages/dashboard/SalesIntel";
 
 // Admin
 import AdminOverview from "@/pages/admin/Overview";
@@ -63,12 +65,14 @@ const AdminGuard = ({ children }) => <ProtectedRoute platformAdmin><AdminShell>{
 function Router() {
   const location = useLocation();
   // Google OAuth returns to /auth/callback#session_id=... — handle before any protected route runs.
-  if (location.hash?.includes("session_id=")) {
+  // Exception: /invite?token=... has its own Google acceptance flow that reads the hash locally.
+  if (location.hash?.includes("session_id=") && location.pathname !== "/invite") {
     return <AuthCallback />;
   }
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/pricing" element={<Pricing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -97,6 +101,7 @@ function Router() {
       <Route path="/app/reviews" element={<Protected><Reviews /></Protected>} />
       <Route path="/app/analytics" element={<Protected><Analytics /></Protected>} />
       <Route path="/app/advisor" element={<Protected><BusinessAdvisor /></Protected>} />
+      <Route path="/app/sales-intel" element={<Protected><SalesIntel /></Protected>} />
       <Route path="/app/knowledge" element={<Protected><KnowledgeBase /></Protected>} />
       <Route path="/app/automations" element={<Protected><Automations /></Protected>} />
       <Route path="/app/integrations" element={<Protected><Integrations /></Protected>} />

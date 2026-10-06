@@ -44,7 +44,7 @@ def _bullet_list(items: List[Any], max_items: int = 20) -> str:
 
 
 def build_system_prompt(tenant: dict, industry: dict | None, services: list, knowledge: list,
-                        in_hours: bool, usage_capped: bool) -> str:
+                        in_hours: bool, usage_capped: bool, upsells: list | None = None) -> str:
     ai = tenant.get("ai_employee") or {}
     name = ai.get("name") or "Alex"
     personality = ai.get("personality") or "Warm, professional, concise."
@@ -70,6 +70,15 @@ def build_system_prompt(tenant: dict, industry: dict | None, services: list, kno
 
     svc_block = _bullet_list(services, max_items=30)
     kb_block = _bullet_list([{"question": k.get("question"), "answer": k.get("answer")} for k in (knowledge or [])], max_items=25)
+
+    upsell_block = ""
+    if upsells:
+        lines = []
+        for u in upsells[:20]:
+            triggers = ", ".join(u.get("triggers") or []) or "(always)"
+            pitch = u.get("pitch") or u.get("description") or u.get("name") or ""
+            lines.append(f"- {u.get('name')} — triggers on: {triggers} — say: \"{pitch}\"")
+        upsell_block = "\n".join(lines)
 
     hours_block = ""
     if tenant.get("hours"):
@@ -135,6 +144,9 @@ Human fallback number: {fallback or '(none set — never promise a transfer you 
 Knowledge base:
 {kb_block}
 
+Upsell suggestions (offer naturally when the caller books or asks about a matching service — do NOT be pushy, mention at most one):
+{upsell_block or '(none configured)'}
+
 {chr(10).join(ind_bits)}
 
 {tools_doc}
@@ -167,10 +179,10 @@ def parse_ai_response(text: str) -> Dict[str, Any]:
 
 async def receptionist_reply(tenant: dict, industry: dict | None, services: list,
                              knowledge: list, history: list, caller_utterance: str,
-                             usage_capped: bool = False) -> Dict[str, Any]:
+                             usage_capped: bool = False, upsells: list | None = None) -> Dict[str, Any]:
     """Core receptionist loop — returns {reply, action, end}."""
     in_hours = is_within_hours(tenant.get("hours") or {})
-    system = build_system_prompt(tenant, industry, services, knowledge, in_hours, usage_capped)
+    system = build_system_prompt(tenant, industry, services, knowledge, in_hours, usage_capped, upsells=upsells)
 
     key = os.environ.get("EMERGENT_LLM_KEY")
     try:

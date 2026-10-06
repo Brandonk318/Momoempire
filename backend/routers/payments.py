@@ -1,10 +1,9 @@
-"""Stripe-powered subscription checkout. Phase 1: minimal plan picker."""
+"""Stripe-powered subscription checkout. Uses admin-configured Stripe price IDs when set."""
 import os
 import stripe
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel, Field
-from typing import Optional
 from db import get_db
 from security import require_tenant_user
 
@@ -14,39 +13,57 @@ stripe.api_key = os.environ.get("STRIPE_SECRET_KEY") or "sk_test_emergent"
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
 
-# Server-defined plans (never trust client-provided amounts)
-PLANS = {
-    "starter": {"amount": 4900, "name": "Starter", "lookup_key": "aio_starter_monthly"},
-    "growth":  {"amount": 14900, "name": "Growth",  "lookup_key": "aio_growth_monthly"},
-    "scale":   {"amount": 39900, "name": "Scale",   "lookup_key": "aio_scale_monthly"},
-}
-
-
 class CheckoutRequest(BaseModel):
-    plan_id: str
+    plan_id: str                   # Plan.key
     origin_url: str
     quantity: int = Field(1, ge=1, le=5)
 
 
+async def _get_db_plan(plan_id: str) -> dict:
+    db = get_db()
+    plan = await db.plans.find_one({"key": plan_id}, {"_id": 0})
+    if not plan:
+        raise HTTPException(400, "Unknown plan")
+    return plan
+
+
 @router.get("/plans")
 async def list_plans():
-    return [{"id": pid, **p} for pid, p in PLANS.items()]
+    """Checkout-ready plans (public → paid, non-enterprise)."""
+    db = get_db()
+    plans = await db.plans.find(
+        {"is_public": True, "price_cents": {"$gt": 0}, "key": {"$ne": "enterprise"}},
+        {"_id": 0},
+    ).sort("sort_order", 1).to_list(100)
+    return plans
 
 
 @router.post("/checkout")
 async def create_checkout(req: CheckoutRequest, user: dict = Depends(require_tenant_user)):
     db = get_db()
-    plan = PLANS.get(req.plan_id)
-    if not plan:
-        raise HTTPException(400, "Unknown plan")
+    plan = await _get_db_plan(req.plan_id)
+    if plan.get("price_cents", 0) <= 0:
+        raise HTTPException(400, "Plan not purchasable — contact sales")
+
+    line_item: dict
+    if plan.get("stripe_price_id"):
+        # Real Stripe product/price configured by admin
+        line_item = {"price": plan["stripe_price_id"], "quantity": req.quantity}
+    else:
+        # Ad-hoc price (test mode / before admin wires Stripe)
+        line_item = {
+            "price_data": {
+                "currency": "usd",
+                "product_data": {"name": f"AI Office — {plan['name']}"},
+                "unit_amount": plan["price_cents"],
+                "recurring": {"interval": "month"},
+            },
+            "quantity": req.quantity,
+        }
+
     try:
         session = stripe.checkout.Session.create(
-            line_items=[{"price_data": {
-                "currency": "usd",
-                "product_data": {"name": f"AI Office — {plan['name']} Plan"},
-                "unit_amount": plan["amount"],
-                "recurring": {"interval": "month"},
-            }, "quantity": req.quantity}],
+            line_items=[line_item],
             mode="subscription",
             success_url=f"{req.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{req.origin_url}/payment/cancel",
@@ -60,7 +77,7 @@ async def create_checkout(req: CheckoutRequest, user: dict = Depends(require_ten
         "tenant_id": user["tenant_id"],
         "user_id": user["id"],
         "plan_id": req.plan_id,
-        "amount": plan["amount"] * req.quantity,
+        "amount": plan["price_cents"] * req.quantity,
         "currency": "usd",
         "status": "initiated",
         "payment_status": "pending",
@@ -85,16 +102,22 @@ async def payment_status(session_id: str):
                     {"$set": {
                         "status": "completed", "payment_status": "paid",
                         "stripe_subscription_id": s.subscription,
+                        "stripe_customer_id": s.customer,
                         "stripe_payment_intent_id": s.payment_intent,
                         "updated_at": datetime.now(timezone.utc).isoformat(),
                     }},
                 )
                 record = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
-                # mark tenant subscription active
                 if record and record.get("tenant_id"):
                     await db.tenants.update_one(
                         {"id": record["tenant_id"]},
-                        {"$set": {"subscription_status": "active", "updated_at": datetime.now(timezone.utc).isoformat()}},
+                        {"$set": {
+                            "subscription_status": "active",
+                            "plan_id": record.get("plan_id"),
+                            "stripe_subscription_id": s.subscription,
+                            "stripe_customer_id": s.customer,
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }},
                     )
         except stripe.error.StripeError:
             pass
@@ -103,7 +126,6 @@ async def payment_status(session_id: str):
 
 @router.post("/stripe/webhook", include_in_schema=False)
 async def stripe_webhook(request: Request):
-    # mounted under /api so full path is /api/payments/stripe/webhook
     db = get_db()
     payload = await request.body()
     sig = request.headers.get("stripe-signature", "")
@@ -120,12 +142,18 @@ async def stripe_webhook(request: Request):
                 "status": "completed",
                 "payment_status": obj.get("payment_status", "paid"),
                 "stripe_subscription_id": obj.get("subscription"),
+                "stripe_customer_id": obj.get("customer"),
                 "stripe_payment_intent_id": obj.get("payment_intent"),
                 "updated_at": now,
             }},
         )
         meta = obj.get("metadata") or {}
         if meta.get("tenant_id"):
-            await db.tenants.update_one({"id": meta["tenant_id"]},
-                                        {"$set": {"subscription_status": "active", "updated_at": now}})
+            await db.tenants.update_one({"id": meta["tenant_id"]}, {"$set": {
+                "subscription_status": "active",
+                "plan_id": meta.get("plan_id"),
+                "stripe_subscription_id": obj.get("subscription"),
+                "stripe_customer_id": obj.get("customer"),
+                "updated_at": now,
+            }})
     return {"status": "ok"}

@@ -45,6 +45,7 @@ const GROUPS = [
     items: [
       { to: "/app/analytics", icon: LineChart, label: "Analytics", testId: "nav-analytics" },
       { to: "/app/advisor", icon: Compass, label: "Business Advisor", testId: "nav-advisor" },
+      { to: "/app/sales-intel", icon: Target, label: "Sales Intel", testId: "nav-sales-intel" },
       { to: "/app/knowledge", icon: BookOpenText, label: "Knowledge Base", testId: "nav-knowledge" },
     ],
   },

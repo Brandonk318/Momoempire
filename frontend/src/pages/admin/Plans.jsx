@@ -32,6 +32,7 @@ export default function AdminPlans() {
         interval: form.interval, trial_days: Number(form.trial_days || 0),
         sort_order: Number(form.sort_order || 100), is_public: !!form.is_public,
         description: form.description || "", features: form.features || [],
+        stripe_price_id: (form.stripe_price_id || "").trim(),
         limits: Object.fromEntries(Object.entries(form.limits).map(([k, v]) => [k, Number(v) || 0])),
         overage: Object.fromEntries(Object.entries(form.overage).map(([k, v]) => [k, Number(v) || 0])),
       });
@@ -65,6 +66,7 @@ export default function AdminPlans() {
             <div className="mt-4 space-y-1 text-xs text-muted-foreground font-mono">
               {Object.entries(p.limits || {}).map(([k, v]) => <div key={k}>· {k.replace(/_/g, " ")}: {v}</div>)}
             </div>
+            {p.stripe_price_id && <div className="mt-2 text-[11px] font-mono text-emerald-700 truncate" title={p.stripe_price_id}>✓ stripe: {p.stripe_price_id}</div>}
             <Button className="mt-5" variant="outline" onClick={() => openEdit(p)} data-testid={`plan-edit-${p.key}`}><Pencil className="h-3 w-3 mr-1" />Edit</Button>
           </div>
         ))}
@@ -82,6 +84,10 @@ export default function AdminPlans() {
                 <div className="space-y-1.5"><Label>Sort order</Label><Input type="number" value={form.sort_order || 100} onChange={(e) => setForm({ ...form, sort_order: e.target.value })} /></div>
               </div>
               <div className="space-y-1.5"><Label>Description</Label><Input value={form.description || ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+              <div className="space-y-1.5">
+                <Label>Stripe Price ID <span className="text-[11px] text-muted-foreground">(price_XXXX — leave empty to use ad-hoc price)</span></Label>
+                <Input value={form.stripe_price_id || ""} placeholder="price_1AbcdefGhijkl" onChange={(e) => setForm({ ...form, stripe_price_id: e.target.value })} data-testid={`plan-stripe-price-${open?.key}`} />
+              </div>
               <div>
                 <Label>Limits</Label>
                 <div className="grid grid-cols-3 gap-3 mt-2">

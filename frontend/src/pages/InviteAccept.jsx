@@ -13,6 +13,7 @@ export default function InviteAccept() {
   const [preview, setPreview] = useState(null);
   const [form, setForm] = useState({ name: "", password: "" });
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [err, setErr] = useState(null);
   const nav = useNavigate();
 
@@ -20,6 +21,28 @@ export default function InviteAccept() {
     if (!token) { setErr("Missing invite token"); return; }
     api.get(`/public/invitations/${token}`).then((r) => setPreview(r.data)).catch((e) => setErr(errMessage(e)));
   }, [token]);
+
+  // After Google OAuth redirect we'll land back here with #session_id=
+  useEffect(() => {
+    if (!token) return;
+    const hash = window.location.hash || "";
+    const m = hash.match(/session_id=([^&]+)/);
+    if (!m) return;
+    const session_id = decodeURIComponent(m[1]);
+    setGoogleLoading(true);
+    (async () => {
+      try {
+        const { data } = await api.post("/public/invitations/accept-google", { token, session_id });
+        window.history.replaceState({}, "", window.location.pathname + window.location.search);
+        toast.success(`Welcome, ${data.name || data.email}`);
+        nav("/app", { replace: true });
+      } catch (e) {
+        toast.error(errMessage(e));
+      } finally {
+        setGoogleLoading(false);
+      }
+    })();
+  }, [token, nav]);
 
   const accept = async () => {
     setLoading(true);
@@ -31,6 +54,12 @@ export default function InviteAccept() {
     finally { setLoading(false); }
   };
 
+  const startGoogle = () => {
+    // Return to this invite URL so we keep the token in query string
+    const redirect = `${window.location.origin}/invite?token=${encodeURIComponent(token)}`;
+    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirect)}`;
+  };
+
   if (err) return <div className="min-h-screen grid place-items-center text-sm text-muted-foreground">{err}</div>;
   if (!preview) return <div className="min-h-screen grid place-items-center text-sm text-muted-foreground">Loading…</div>;
 
@@ -39,13 +68,37 @@ export default function InviteAccept() {
       <div className="w-full max-w-sm">
         <Logo />
         <h1 className="font-display text-3xl mt-8 tracking-tight">Join {preview.tenant_name}</h1>
-        <p className="text-sm text-muted-foreground mt-1">You've been invited as {preview.invitation.role}. Set up your account:</p>
-        <div className="mt-6 space-y-4">
+        <p className="text-sm text-muted-foreground mt-1">
+          You've been invited as <span className="font-medium text-foreground">{preview.invitation.role}</span>. Accept in one click with Google:
+        </p>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="mt-6 w-full h-11 gap-2"
+          onClick={startGoogle}
+          disabled={googleLoading}
+          data-testid="invite-google-btn"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
+            <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.4-1.6 4-5.5 4-3.3 0-6-2.7-6-6s2.7-6 6-6c1.9 0 3.1.8 3.9 1.5l2.7-2.6C16.9 3.2 14.7 2.2 12 2.2 6.9 2.2 2.8 6.3 2.8 11.4S6.9 20.5 12 20.5c6.9 0 9.3-4.9 9.3-8.3 0-.6-.1-1.1-.2-1.6H12z" />
+          </svg>
+          {googleLoading ? "Finishing sign-in…" : "Accept with Google"}
+        </Button>
+        <p className="text-[11px] text-muted-foreground text-center mt-2">
+          Your Google email must match <span className="font-mono">{preview.invitation.email}</span>.
+        </p>
+
+        <div className="my-6 flex items-center gap-3 text-[11px] text-muted-foreground">
+          <div className="flex-1 h-px bg-border" /> or create a password <div className="flex-1 h-px bg-border" />
+        </div>
+
+        <div className="space-y-4">
           <div className="space-y-1.5"><Label>Email</Label><Input value={preview.invitation.email} disabled /></div>
           <div className="space-y-1.5"><Label>Your name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="invite-name-input" /></div>
           <div className="space-y-1.5"><Label>Password</Label><Input type="password" minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} data-testid="invite-password-input" /></div>
           <Button className="w-full h-11 btn-tenant" onClick={accept} disabled={loading || !form.name || form.password.length < 8} data-testid="invite-accept-btn">
-            {loading ? "Joining…" : "Join the team"}
+            {loading ? "Joining…" : "Join with password"}
           </Button>
         </div>
       </div>

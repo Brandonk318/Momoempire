@@ -31,7 +31,7 @@ export default function Landing() {
           <nav className="hidden md:flex items-center gap-8 text-[13px] text-white/70">
             <a href="#how" className="hover:text-white">How it works</a>
             <a href="#industries" className="hover:text-white">Industries</a>
-            <a href="#pricing" className="hover:text-white">Pricing</a>
+            <Link to="/pricing" className="hover:text-white">Pricing</Link>
           </nav>
           <div className="flex items-center gap-2">
             <Link to="/login"><Button variant="ghost" className="text-white hover:bg-white/10" data-testid="landing-login-btn">Log in</Button></Link>

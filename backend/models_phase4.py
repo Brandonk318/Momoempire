@@ -16,6 +16,7 @@ class PlanIn(BaseModel):
     is_public: bool = True
     sort_order: int = 100
     description: str = ""
+    stripe_price_id: str = ""  # Stripe recurring price id (price_XXX) used for real subscriptions
 
 
 class Plan(PlanIn):

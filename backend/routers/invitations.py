@@ -1,6 +1,6 @@
 """Team invitations (token-based)."""
 from fastapi import APIRouter, HTTPException, Depends, Response
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from db import get_db
 from models import _uuid, _now_iso
 from models_phase2 import InvitationIn, Invitation, InvitationAccept
@@ -109,3 +109,89 @@ async def accept(data: InvitationAccept, response: Response):
     refresh = create_refresh_token(user_id)
     set_auth_cookies(response, access, refresh)
     return {"id": user_id, "email": email, "role": inv["role"], "tenant_id": inv["tenant_id"], "name": data.name}
+
+
+# ---------- Google-based invite acceptance ----------
+import httpx
+from pydantic import BaseModel
+
+
+class InvitationAcceptGoogle(BaseModel):
+    token: str
+    session_id: str  # from Emergent OAuth callback hash
+
+
+@public_router.post("/accept-google")
+async def accept_google(data: InvitationAcceptGoogle, response: Response):
+    """Accept an invitation using Emergent-managed Google auth.
+    Requires the Google-authenticated email to match the invited email."""
+    db = get_db()
+    inv = await db.invitations.find_one({"token": data.token})
+    if not inv or inv.get("status") != "pending":
+        raise HTTPException(400, "Invite invalid or already used")
+    inv_email = inv["email"].lower()
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as hc:
+            r = await hc.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": data.session_id},
+            )
+            r.raise_for_status()
+            info = r.json()
+    except Exception as e:
+        raise HTTPException(401, f"Google session exchange failed: {e}")
+
+    google_email = (info.get("email") or "").lower()
+    if not google_email:
+        raise HTTPException(400, "No email on Google session")
+    if google_email != inv_email:
+        raise HTTPException(400, f"Google account '{google_email}' does not match the invited email '{inv_email}'.")
+
+    session_token = info.get("session_token") or ""
+    name = info.get("name") or inv_email.split("@")[0]
+    picture = info.get("picture") or ""
+
+    user = await db.users.find_one({"email": inv_email})
+    if user:
+        # Existing user → attach to tenant with the invited role.
+        patch = {
+            "tenant_id": inv["tenant_id"],
+            "role": inv["role"],
+            "name": name,
+            "email_verified": True,
+        }
+        if picture:
+            patch["picture"] = picture
+        await db.users.update_one({"id": user["id"]}, {"$set": patch})
+        user_id = user["id"]
+    else:
+        user_id = _uuid()
+        await db.users.insert_one({
+            "id": user_id,
+            "email": inv_email,
+            "password_hash": "",
+            "name": name,
+            "role": inv["role"],
+            "tenant_id": inv["tenant_id"],
+            "email_verified": True,
+            "mfa_enabled": False,
+            "picture": picture,
+            "created_at": _now_iso(),
+        })
+
+    await db.invitations.update_one(
+        {"token": data.token}, {"$set": {"status": "accepted", "accepted_at": _now_iso()}}
+    )
+
+    expires = datetime.now(timezone.utc) + timedelta(days=7)
+    await db.user_sessions.insert_one({
+        "id": _uuid(), "user_id": user_id, "session_token": session_token,
+        "expires_at": expires, "created_at": _now_iso(),
+    })
+    response.set_cookie("session_token", session_token, httponly=True, secure=True,
+                        samesite="none", max_age=7 * 86400, path="/")
+    access = create_access_token(user_id, inv_email, inv["role"], inv["tenant_id"])
+    refresh = create_refresh_token(user_id)
+    set_auth_cookies(response, access, refresh)
+    return {"id": user_id, "email": inv_email, "role": inv["role"], "tenant_id": inv["tenant_id"], "name": name}

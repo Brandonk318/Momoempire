@@ -7,7 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Phone, PhoneCall, PhoneOff, Send, UserPlus, CalendarPlus, Headphones } from "lucide-react";
+import { Phone, PhoneCall, PhoneOff, Send, UserPlus, CalendarPlus, Headphones, Sparkles } from "lucide-react";
+import { LeadScoreBadge } from "./SalesIntel";
 
 const STATUS_COLOR = {
   active: "bg-emerald-100 text-emerald-900",
@@ -36,6 +37,8 @@ export default function Calls() {
   const [simOpen, setSimOpen] = useState(false);
   const [simForm, setSimForm] = useState({ caller_name: "", caller_phone: "" });
   const [listening, setListening] = useState(false);
+  const [extracted, setExtracted] = useState(null); // {address, phone, email, service_requested, urgency, notes_summary}
+  const [extracting, setExtracting] = useState(false);
   const recRef = useRef(null);
   const endRef = useRef(null);
 
@@ -45,6 +48,7 @@ export default function Calls() {
 
   const openConv = async (c) => {
     setActive(c);
+    setExtracted(c?.extracted_fields || null);
     const { data } = await api.get(`/conversations/${c.id}`);
     setMessages(data.messages);
   };
@@ -97,6 +101,44 @@ export default function Calls() {
     } catch (e) { toast.error(errMessage(e)); }
   };
 
+  const extractFields = async () => {
+    if (!active) return;
+    setExtracting(true);
+    try {
+      const { data } = await api.post(`/sales/conversations/${active.id}/extract`);
+      setExtracted(data.fields);
+      toast.success("AI pulled out call details");
+    } catch (e) { toast.error(errMessage(e)); }
+    finally { setExtracting(false); }
+  };
+
+  const applyFields = async () => {
+    if (!active || !extracted) return;
+    try {
+      await api.post(`/sales/conversations/${active.id}/apply-fields`, {
+        name: active.caller_name || "",
+        phone: extracted.phone || active.caller_phone || "",
+        email: extracted.email || "",
+        address: extracted.address || "",
+        service_requested: extracted.service_requested || "",
+        urgency: extracted.urgency || "",
+        notes: extracted.notes_summary || "",
+      });
+      toast.success("CRM updated");
+      load();
+    } catch (e) { toast.error(errMessage(e)); }
+  };
+
+  const scoreCall = async () => {
+    if (!active) return;
+    try {
+      const { data } = await api.post(`/sales/conversations/${active.id}/score`);
+      setActive({ ...active, lead_score: data.score });
+      toast.success(`Scored ${data.score.label} (${data.score.score})`);
+      load();
+    } catch (e) { toast.error(errMessage(e)); }
+  };
+
   const toggleMic = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { toast.error("Mic unsupported in this browser — type instead"); return; }
@@ -146,14 +188,40 @@ export default function Calls() {
             <div className="flex-1 grid place-items-center text-sm text-muted-foreground">Pick a call to see the transcript.</div>
           ) : (
             <>
-              <header className="px-5 py-4 border-b border-border flex items-center justify-between">
+              <header className="px-5 py-4 border-b border-border flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <div className="font-medium flex items-center gap-2"><Phone className="h-4 w-4" />{active.caller_name || "Unknown"}</div>
                   <div className="text-xs text-muted-foreground font-mono">{active.caller_phone} · {active.status}</div>
                 </div>
-                {active.status === "active" && <Button variant="outline" onClick={endCall} data-testid="end-call-btn"><PhoneOff className="h-4 w-4 mr-1" />End call</Button>}
+                <div className="flex items-center gap-2">
+                  <LeadScoreBadge score={active.lead_score} />
+                  {active.status !== "active" && (
+                    <>
+                      <Button size="sm" variant="outline" onClick={scoreCall} data-testid="score-call-btn"><Sparkles className="h-3.5 w-3.5 mr-1" />Re-score</Button>
+                      <Button size="sm" variant="outline" onClick={extractFields} disabled={extracting} data-testid="extract-fields-btn"><Sparkles className="h-3.5 w-3.5 mr-1" />{extracting ? "Reading…" : "Auto-fill CRM"}</Button>
+                    </>
+                  )}
+                  {active.status === "active" && <Button variant="outline" onClick={endCall} data-testid="end-call-btn"><PhoneOff className="h-4 w-4 mr-1" />End call</Button>}
+                </div>
               </header>
               <div className="flex-1 overflow-y-auto p-5 space-y-3" data-testid="call-transcript">
+                {extracted && (
+                  <div className="rounded-xl border border-border bg-amber-50/40 p-3 mb-3" data-testid="extracted-panel">
+                    <div className="flex items-center gap-2 text-xs font-medium">
+                      <Sparkles className="h-3.5 w-3.5" />Call details the AI heard
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[12px] font-mono">
+                      {["phone", "email", "address", "service_requested", "urgency", "preferred_time", "budget_hint"].map((k) => (
+                        extracted[k] ? <div key={k}><span className="text-muted-foreground">{k}:</span> {extracted[k]}</div> : null
+                      ))}
+                    </div>
+                    {extracted.notes_summary && <div className="mt-2 text-[12px] italic">{extracted.notes_summary}</div>}
+                    <div className="mt-3 flex gap-2">
+                      <Button size="sm" className="btn-tenant" onClick={applyFields} data-testid="apply-fields-btn">Save to CRM</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setExtracted(null)}>Dismiss</Button>
+                    </div>
+                  </div>
+                )}
                 {messages.map((m) => (
                   <div key={m.id} className={`flex gap-3 ${m.role === "caller" ? "justify-end" : ""}`}>
                     {m.role === "ai" && <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-indigo-500 to-fuchsia-500 shrink-0 mt-1" />}

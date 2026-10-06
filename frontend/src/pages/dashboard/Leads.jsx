@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
+import { LeadScoreBadge } from "./SalesIntel";
 
 const STATUSES = ["new", "contacted", "qualified", "won", "lost"];
 const COLORS = {
@@ -56,8 +57,13 @@ export default function Leads() {
             <div className="space-y-2 min-h-[200px]">
               {list.filter((l) => l.status === status).map((l) => (
                 <div key={l.id} className="rounded-lg border border-border bg-background p-3" data-testid={`lead-card-${l.id}`}>
-                  <div className="text-sm font-medium truncate">{l.name}</div>
-                  <div className="text-[11px] text-muted-foreground truncate">{l.phone || l.email || l.source}</div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">{l.name}</div>
+                      <div className="text-[11px] text-muted-foreground truncate">{l.phone || l.email || l.source}</div>
+                    </div>
+                    <LeadScoreBadge score={l.lead_score} />
+                  </div>
                   <div className="mt-2 flex gap-1 flex-wrap">
                     {STATUSES.filter((s) => s !== l.status).map((s) => (
                       <button key={s} onClick={() => move(l, s)} className={`text-[10px] px-2 py-0.5 rounded-full ${COLORS[s]} hover:opacity-80`} data-testid={`lead-move-${l.id}-${s}`}>→ {s}</button>

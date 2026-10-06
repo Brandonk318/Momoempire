@@ -9,12 +9,14 @@ import { useAuth } from "@/context/AuthContext";
 export default function Billing() {
   const [plans, setPlans] = useState([]);
   const [tenant, setTenant] = useState(null);
+  const [overage, setOverage] = useState(null);
   const [loading, setLoading] = useState("");
   const { user } = useAuth();
 
   useEffect(() => {
     api.get("/plans").then((r) => setPlans(r.data));
     api.get("/tenants/me").then((r) => setTenant(r.data));
+    api.get("/usage/overage").then((r) => setOverage(r.data)).catch(() => {});
   }, []);
 
   const subscribe = async (planId) => {
@@ -39,6 +41,25 @@ export default function Billing() {
         </div>
         <Badge variant={tenant?.subscription_status === "active" ? "default" : "secondary"} data-testid="billing-current-badge">{tenant?.subscription_status || "trial"}</Badge>
       </div>
+
+      {overage && overage.total_cents > 0 && (
+        <div className="surface p-6 mb-6 border-amber-200 border" data-testid="overage-card">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="overline">Overage this period · {overage.period}</div>
+              <div className="font-display text-3xl mt-1">${(overage.total_cents / 100).toFixed(2)}</div>
+              <div className="text-xs text-muted-foreground mt-1">You've gone over your {overage.plan} plan quota — billed on next invoice.</div>
+            </div>
+            <div className="flex flex-wrap gap-2 justify-end">
+              {overage.items.map((it) => (
+                <Badge key={it.metric} variant="secondary" className="font-mono text-[11px]">
+                  {it.metric}: +{Math.round(it.overage_units)} ({(it.rate_cents).toFixed(1)}¢)
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {plans.filter((p) => p.price_cents > 0 && p.key !== "enterprise").map((p) => (
