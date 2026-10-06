@@ -1,0 +1,35 @@
+{
+  "summary": "Phase 8 full-stack testing complete. Backend: 12/12 pytest in /app/backend/tests/test_phase8.py — smoke (/api/health + /pricing), post-job auto-trigger on appointment status→completed (creates post_job_runs row with customer_name/service/thanks_sent + winback_scheduled_for ~60d), manual POST /api/growth/post-job/{id}/run returns {thanks_sent:{sms,email}, winback_scheduled_for}, winback idempotency (followup_jobs count stays at 1 for tenant_id+appointment_id+kind='winback-60d' even after status PUT re-fires & manual re-trigger), review-response positive (tone='grateful', non-empty reply) + negative (tone='apologetic', reply contains 'make it right'/'contact'/'fix'), standup preview returns all 5 keys, standup send returns preview starting 'Good morning', social draft returns caption ≥30 chars with hashtags[] + method, daily-standup cron 401 without Bearer and 200 {accepted:true} with WEBHOOK_CRON_SECRET, tenants.review_url persists via PUT /api/tenants/me and GET /api/tenants/me. Frontend: /app/growth renders all 7 tabs (growth-tab-digest/winback/referrals/postjob/reviews/standup/social). Reviews tab fills customer+rating+text, clicking review-draft-btn renders tone badge ('grateful · llm') + reply + review-copy-btn. Standup tab shows standup-appts/hot/pending stat tiles (all 0 for fresh tenant), standup-send-btn clickable without error. Social tab click → social-result with caption + hashtag badges + social-copy-btn. Settings → Profile fills settings-review-url-input with 'https://g.page/r/testbiz/review', settings-save-btn triggers toast 'Workspace saved' and GET /api/tenants/me confirms review_url persisted.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/tenants/appointments", "issue": "AppointmentIn model has no customer_email field; the review request mentions providing customer_email, but it is silently dropped by Pydantic. run_post_job then falls back to appt.get('customer_email','') and skips the thank-you email branch. If email was intended as a first-class channel on appointments, add customer_email: str = '' to AppointmentIn."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase8.py",
+    "/app/test_reports/pytest/phase8_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Add customer_email field to AppointmentIn so thank-you email branch of run_post_job can actually fire from a scheduled appointment."
+  ],
+  "critical_code_review_comments": [
+    "run_post_job in routers/post_job.py always inserts a post_job_runs row — on every status-completed PUT and every manual /run call. That is append-only history (as noted in request) but could flood the collection if a user toggles status repeatedly. Consider deduping on (tenant_id, appointment_id, within 1h window) or at least capping list_post_job_runs to a sane default.",
+    "post_job.draft_review_response & draft_social_post pin model 'openai gpt-6-sol'. Same risk flagged in iteration 6 — externalize via env to avoid silent fallback if model id ages out.",
+    "post_job._standup_payload fires 4 Mongo queries sequentially — consider asyncio.gather for ~4x latency reduction on the owner dashboard load.",
+    "cron.cron_daily_standup fires asyncio.create_task(_send_standup_to_all()) but there is no concurrency guard; two overlapping cron fires (if the platform retries) will double-send. Add a lightweight db.cron_locks collection with a 10-min TTL doc keyed by cron name.",
+    "tenants.update_appointment passes the full data.model_dump() into $set — this will overwrite status back to 'scheduled' default if a client PUTs without specifying status. Consider only patching fields that are explicitly set, or exclude_unset=True."
+  ],
+  "updated_files": ["/app/backend/tests/test_phase8.py"],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% (5/5 UI flows: 7 tabs render + review drafter + standup + social + settings review_url)"},
+  "test_credentials": "Each run registers a fresh test_p8_* / ui_p8_* owner with password testpass123; business_name auto-generated P8Biz<rand> / UIBiz<rand>. No seeded credentials needed.",
+  "seed_data_creation": "Per run: 1 tenant + 1 user; 2 appointments (one auto-triggers post-job via status=completed, one for manual /run); 1 review_url saved on tenant. All data prefixed TEST_P8_* / UI P8 for cleanup.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Phase 8 is green end-to-end. test_phase8.py reads MONGO_URL/DB_NAME/WEBHOOK_CRON_SECRET from /app/backend/.env and REACT_APP_BACKEND_URL from /app/frontend/.env — portable. For idempotency check we query db.followup_jobs directly (upsert key: tenant_id+appointment_id+kind='winback-60d'); do NOT expect winback-60d jobs in GET /api/sales/followups (filtered out). Review-response LLM is currently reachable (method='llm' observed); rule fallback also tested implicitly via tone assertions which match both branches. All UI data-testids match the request spec exactly."
+}

@@ -224,6 +224,9 @@ class Lead(LeadIn):
 class AppointmentIn(BaseModel):
     customer_name: str
     customer_phone: str = ""
+    customer_email: Optional[EmailStr] = None
+    customer_id: Optional[str] = None
+    lead_id: Optional[str] = None
     service_id: Optional[str] = None
     service_name: str = ""
     staff: str = ""

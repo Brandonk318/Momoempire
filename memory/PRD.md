@@ -70,5 +70,11 @@ All four phases ship as **one coherent multi-tenant platform**. Adding a new ind
 - **Real-time coach** (`/api/sales/coach`): LLM returns 3-5 verbatim suggestion lines; UI panel in Calls (click to drop into reply input). Objection library hits surface in rule fallback.
 - **Appointment reminders cron**: hourly scan sends 24h-before SMS reminders (idempotent via `reminder_sent_at`).
 - **Website embed widget**: `GET /api/public/widget/{slug}.js` returns a brand-colored floating lead-capture button; `POST /api/public/widget/{slug}/lead` writes a widget-sourced lead and converts referrals.
-- **Crons**: 4 scheduled (`followups-dispatch` /15m, `appt-reminders` hourly, `overage-nightly` 02:30, `weekly-digest` Mon 14:00). All bearer-authed via `WEBHOOK_CRON_SECRET`.
+### Phase 8 — Growth autopilot layer (Oct 2026) ✅
+- **Post-job autopilot**: On appointment `status→completed`, immediately texts/emails a branded thank-you (with Google review URL if set) and schedules a 60-day win-back SMS. Idempotent per appointment. Owner-side history at `/api/growth/post-job/runs`.
+- **AI review response drafter**: `POST /api/growth/review-response` takes a pasted review + rating → draft reply with tone (grateful/apologetic/neutral) via LLM; deterministic fallback included. UI panel on Growth → Review replies.
+- **Daily owner standup**: `/api/growth/standup/preview|send` summarizes today's appointments, hot leads, pending nudges, and missed-call count. Cron `daily-standup` fires 13:00 UTC (~9am ET / 7am MT); SMS + email delivery.
+- **Weekly social post drafter**: `/api/growth/social/draft` writes a Monday Facebook/Instagram caption with win stats + hashtags. One-tap "Copy caption + tags."
+- `AppointmentIn` extended with `customer_email`, `customer_id`, `lead_id` so the full post-job pipeline (SMS + email + CRM linkback) activates.
+- Crons live: 5 total (`followups-dispatch` /15m, `appt-reminders` hourly, `overage-nightly` 02:30, `weekly-digest` Mon 14:00, `daily-standup` 13:00). All bearer-authed via `WEBHOOK_CRON_SECRET`.
 
