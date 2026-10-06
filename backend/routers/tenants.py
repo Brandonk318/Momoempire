@@ -108,6 +108,25 @@ async def update_my_tenant(data: TenantUpdate, user: dict = Depends(require_tena
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
 
 
+class CountryPreferenceIn(BaseModel):
+    country: str
+
+
+@router.put("/me/country")
+async def set_my_country(data: CountryPreferenceIn, user: dict = Depends(require_tenant_owner_or_admin)):
+    """Switch the tenant to an enabled market."""
+    code = (data.country or "").upper().strip()
+    db = get_db()
+    country = await db.countries.find_one({"code": code, "enabled": True}, {"_id": 0})
+    if not country:
+        raise HTTPException(400, "Country is not enabled for this platform")
+    await db.tenants.update_one(
+        {"id": user["tenant_id"]},
+        {"$set": {"country": code, "updated_at": _now_iso()}},
+    )
+    return {"ok": True, "country": code}
+
+
 class LangIn(BaseModel):
     lang: str
 
