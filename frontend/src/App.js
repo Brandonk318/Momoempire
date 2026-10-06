@@ -51,6 +51,8 @@ import AdminCountries from "@/pages/admin/Countries";
 import FeatureFlags from "@/pages/admin/FeatureFlags";
 import SystemHealth from "@/pages/admin/SystemHealth";
 import AdminAIQuality from "@/pages/admin/AIQuality";
+import AdminPlans from "@/pages/admin/Plans";
+import PlatformAnalytics from "@/pages/admin/PlatformAnalytics";
 
 const AppShell = ({ children }) => <DashboardLayout>{children}</DashboardLayout>;
 const AdminShell = ({ children }) => <AdminLayout>{children}</AdminLayout>;
@@ -110,6 +112,8 @@ function Router() {
       <Route path="/admin/feature-flags" element={<AdminGuard><FeatureFlags /></AdminGuard>} />
       <Route path="/admin/health" element={<AdminGuard><SystemHealth /></AdminGuard>} />
       <Route path="/admin/ai-quality" element={<AdminGuard><AdminAIQuality /></AdminGuard>} />
+      <Route path="/admin/plans" element={<AdminGuard><AdminPlans /></AdminGuard>} />
+      <Route path="/admin/analytics" element={<AdminGuard><PlatformAnalytics /></AdminGuard>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

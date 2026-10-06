@@ -14,6 +14,54 @@ import { Link } from "react-router-dom";
 
 const PRESET_COLORS = ["#0A0A0A", "#2563EB", "#059669", "#DC2626", "#7C3AED", "#D97706", "#0F766E", "#DB2777"];
 
+function SecurityTab() {
+  const [sessions, setSessions] = useState([]);
+  const [workspaces, setWorkspaces] = useState([]);
+  const load = () => {
+    api.get("/auth/sessions").then((r) => setSessions(r.data)).catch(() => {});
+    api.get("/auth/workspaces").then((r) => setWorkspaces(r.data)).catch(() => {});
+  };
+  useEffect(() => { load(); }, []);
+  const revoke = async (id) => { if (!confirm("Revoke this session?")) return; try { await api.delete(`/auth/sessions/${id}`); load(); toast.success("Revoked"); } catch (e) { toast.error(errMessage(e)); } };
+  const switchTo = async (tid) => { try { await api.post("/auth/switch", null, { params: { tenant_id: tid } }); window.location.href = "/app"; } catch (e) { toast.error(errMessage(e)); } };
+  return (
+    <div className="grid grid-cols-12 gap-6">
+      <div className="col-span-12 lg:col-span-7 surface p-6" data-testid="security-sessions">
+        <div className="overline mb-3">Active sessions</div>
+        <ul className="divide-y divide-border">
+          {sessions.map((s) => (
+            <li key={s.id} className="flex items-center gap-4 py-3" data-testid={`session-${s.id}`}>
+              <div className="flex-1 min-w-0">
+                <div className="font-mono text-sm">…{s.session_token_tail}</div>
+                <div className="text-[11px] text-muted-foreground">created {new Date(s.created_at).toLocaleString()} · expires {new Date(s.expires_at).toLocaleString()}</div>
+              </div>
+              {s.is_current && <Badge variant="secondary">this session</Badge>}
+              <Button variant="ghost" size="sm" onClick={() => revoke(s.id)} disabled={s.is_current} data-testid={`revoke-${s.id}`}>Revoke</Button>
+            </li>
+          ))}
+          {sessions.length === 0 && <li className="py-6 text-sm text-muted-foreground text-center">No Google sessions.</li>}
+        </ul>
+      </div>
+      <div className="col-span-12 lg:col-span-5 surface p-6" data-testid="security-workspaces">
+        <div className="overline mb-3">Your workspaces</div>
+        <ul className="divide-y divide-border">
+          {workspaces.map((w) => (
+            <li key={w.tenant_id} className="flex items-center gap-3 py-2.5" data-testid={`workspace-${w.tenant_id}`}>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium truncate">{w.tenant_name}</div>
+                <div className="text-[11px] text-muted-foreground">role {w.role}</div>
+              </div>
+              {w.is_current ? <Badge variant="secondary">current</Badge>
+                : <Button variant="outline" size="sm" onClick={() => switchTo(w.tenant_id)} data-testid={`switch-${w.tenant_id}`}>Switch</Button>}
+            </li>
+          ))}
+          {workspaces.length === 0 && <li className="py-6 text-sm text-muted-foreground text-center">Just this workspace.</li>}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export default function Settings() {
   const [tenant, setTenant] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -72,6 +120,7 @@ export default function Settings() {
           <TabsTrigger value="branding" data-testid="settings-tab-branding">Branding</TabsTrigger>
           <TabsTrigger value="team" data-testid="settings-tab-team">Team</TabsTrigger>
           <TabsTrigger value="public" data-testid="settings-tab-public">Public page</TabsTrigger>
+          <TabsTrigger value="security" data-testid="settings-tab-security">Security</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">
@@ -157,6 +206,9 @@ export default function Settings() {
             </div>
             <p className="text-xs text-muted-foreground mt-4">To connect a custom domain, visit the Website page.</p>
           </div>
+        </TabsContent>
+        <TabsContent value="security">
+          <SecurityTab />
         </TabsContent>
       </Tabs>
 

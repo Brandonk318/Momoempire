@@ -134,6 +134,7 @@ export default function DashboardLayout({ children }) {
           )}
           <div className="flex items-center gap-3 px-2 py-2">
             <Avatar className="h-8 w-8">
+              {user?.picture && <img src={user.picture} alt="" className="h-full w-full object-cover" />}
               <AvatarFallback className="bg-foreground text-background text-[11px]">
                 {(user?.name || user?.email || "?").slice(0, 2).toUpperCase()}
               </AvatarFallback>

@@ -39,19 +39,25 @@ async def _usage_totals(tenant_id: str) -> dict:
     return {r["_id"]: r["total"] for r in rows}
 
 
-async def get_plan(tenant_id: str) -> str:
+async def _get_plan_limits(tenant_id: str) -> tuple[str, dict]:
+    """Returns (plan_key, limits_dict) from DB. Falls back to in-code bookmark."""
     db = get_db()
-    t = await db.tenants.find_one({"id": tenant_id}, {"subscription_status": 1, "plan_id": 1})
-    if not t:
-        return "trial"
-    if t.get("subscription_status") != "active":
-        return "trial"
-    return t.get("plan_id") or "starter"
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "subscription_status": 1, "plan_id": 1})
+    key = (t or {}).get("plan_id") or ("trial" if (t or {}).get("subscription_status") != "active" else "starter")
+    plan = await db.plans.find_one({"key": key}, {"_id": 0, "limits": 1})
+    if plan and plan.get("limits"):
+        return key, plan["limits"]
+    return key, PLAN_LIMITS.get(key, PLAN_LIMITS["trial"])
+
+
+async def get_plan(tenant_id: str) -> str:
+    key, _ = await _get_plan_limits(tenant_id)
+    return key
 
 
 async def usage_capped(tenant_id: str, metric: str = "ai_interactions") -> bool:
-    plan = await get_plan(tenant_id)
-    limit = PLAN_LIMITS[plan].get(metric)
+    _, limits = await _get_plan_limits(tenant_id)
+    limit = limits.get(metric)
     if not limit:
         return False
     totals = await _usage_totals(tenant_id)
@@ -72,8 +78,7 @@ def _current_warning_tier(used: float, limit: float) -> float | None:
 
 @router.get("/me")
 async def my_usage(user: dict = Depends(require_tenant_user)):
-    plan = await get_plan(user["tenant_id"])
-    limits = PLAN_LIMITS[plan]
+    plan_key, limits = await _get_plan_limits(user["tenant_id"])
     totals = await _usage_totals(user["tenant_id"])
     out = []
     for metric, limit in limits.items():
@@ -87,7 +92,7 @@ async def my_usage(user: dict = Depends(require_tenant_user)):
             "warning_tier": tier,
             "exhausted": used >= limit,
         })
-    return {"plan": plan, "period": period_key(), "metrics": out, "thresholds": WARNING_THRESHOLDS}
+    return {"plan": plan_key, "period": period_key(), "metrics": out, "thresholds": WARNING_THRESHOLDS}
 
 
 @router.get("/events")

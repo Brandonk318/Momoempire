@@ -292,6 +292,9 @@ async def ensure_indexes():
     await db.industry_briefs.create_index([("tenant_id", 1), ("created_at", -1)])
     await db.user_sessions.create_index("session_token", unique=True)
     await db.user_sessions.create_index("user_id")
+    await db.plans.create_index("key", unique=True)
+    await db.cost_config.create_index("id", unique=True)
+    await db.domain_provider_config.create_index("id", unique=True)
 
 
 async def run_all_seeds():

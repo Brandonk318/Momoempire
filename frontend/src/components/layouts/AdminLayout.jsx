@@ -3,12 +3,14 @@ import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Building2, Factory, Globe2, Flag, Activity, LogOut, Home, ShieldAlert } from "lucide-react";
+import { Building2, Factory, Globe2, Flag, Activity, LogOut, Home, ShieldAlert, Tag, LineChart } from "lucide-react";
 
 const ITEMS = [
   { to: "/admin", end: true, icon: Home, label: "Overview", testId: "admin-nav-overview" },
+  { to: "/admin/analytics", icon: LineChart, label: "Analytics", testId: "admin-nav-analytics" },
   { to: "/admin/tenants", icon: Building2, label: "Tenants", testId: "admin-nav-tenants" },
   { to: "/admin/industries", icon: Factory, label: "Industries", testId: "admin-nav-industries" },
+  { to: "/admin/plans", icon: Tag, label: "Plans & Costs", testId: "admin-nav-plans" },
   { to: "/admin/countries", icon: Globe2, label: "Countries", testId: "admin-nav-countries" },
   { to: "/admin/feature-flags", icon: Flag, label: "Feature Flags", testId: "admin-nav-flags" },
   { to: "/admin/ai-quality", icon: ShieldAlert, label: "AI Quality", testId: "admin-nav-quality" },

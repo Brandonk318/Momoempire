@@ -34,6 +34,10 @@ from routers.knowledge_docs import router as knowledge_docs_router
 from routers.ai_quality import router as quality_router, admin_router as quality_admin_router
 from routers.automation_rules import router as automation_rules_router
 from routers.industry_intel import router as industry_intel_router
+from routers.plans import router as plans_router, public_router as plans_public_router, seed_plans
+from routers.platform_analytics import router as platform_analytics_router
+from routers.domain_providers import router as domain_providers_router, admin_router as domain_providers_admin_router
+from routers.workspaces import router as workspaces_router
 
 app = FastAPI(title="AI Office Platform API")
 api = APIRouter(prefix="/api")
@@ -85,6 +89,12 @@ api.include_router(quality_router)
 api.include_router(quality_admin_router)
 api.include_router(automation_rules_router)
 api.include_router(industry_intel_router)
+api.include_router(plans_router)
+api.include_router(plans_public_router)
+api.include_router(platform_analytics_router)
+api.include_router(domain_providers_router)
+api.include_router(domain_providers_admin_router)
+api.include_router(workspaces_router)
 # Stripe is registered to deliver webhooks to /api/stripe/webhook (top-level).
 api.add_api_route("/stripe/webhook", _stripe_wh, methods=["POST"], include_in_schema=False)
 
@@ -108,6 +118,7 @@ log = logging.getLogger("aio")
 async def startup():
     try:
         await run_all_seeds()
+        await seed_plans()
         log.info("Seed complete")
     except Exception as e:
         log.exception("Seed failed: %s", e)
