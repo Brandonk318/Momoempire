@@ -1,63 +1,73 @@
 # AI Office Platform — Product Requirements Document (PRD)
 
 ## Original problem statement
-Build Phase 1 of a production-ready, multi-tenant SaaS "AI Office Platform". NOT one-industry. Reusable core engine that generates specialized AI Offices for HVAC, plumbing, electrical, roofing, landscaping, pest control, dental, physical therapy, contractors, independent professionals. Philosophy: "We build you an AI employee and digital office." Business owners are non-technical.
+Build a multi-tenant AI Office SaaS: "We build you an AI employee and digital office." Reusable core engine serves many industries (HVAC, plumbing, dental, PT, contractor, etc.). Non-technical business owner. Hardware elite, face swappable.
 
 ## User personas
-- **Business owner (tenant owner)** — small-business operator (HVAC tech, dentist, PT clinic). Non-technical. Needs calm, done-for-you workspace.
-- **Staff / admin inside a tenant** — invited to collaborate (role scaffolding ready, invite flow Phase 2).
-- **Platform admin** — operates the SaaS: manages tenants, industry templates, country availability, feature flags.
-- **Public visitor** — browses a tenant's public business page or marketing landing.
+- **Business owner (tenant owner)** — small-business operator. Primary user of the dashboard.
+- **Staff / admin** — invited teammates with role-scoped access.
+- **Platform admin** — operates the SaaS. Manages tenants, templates, countries, flags.
+- **Customer of a tenant** — uses the white-label portal / public page.
 
 ## Core requirements (static)
-1. Multi-tenant architecture with strict data isolation.
-2. Business onboarding wizard capturing all required fields (plain English).
-3. Industry Office Engine — reusable templates, admin-editable without redeploy.
-4. Dynamic Stripe country selector — DB-backed with status tiers (supported / preview / extended / unsupported / unavailable), admin-overridable.
-5. Authentication: email/password + JWT cookies, password reset, role-based (owner/admin/staff/platform_admin), brute-force lockout, MFA-ready.
-6. Business-owner dashboard with 20 nav sections, grouped (Workspace, Communications, Business, Intelligence, Setup).
-7. Platform admin console (tenants, industries, countries, feature flags, system health).
-8. API-first, modular, scalable, swappable branding (CSS variables).
+1. Multi-tenant isolation; scale to thousands of businesses.
+2. Plain-English onboarding wizard.
+3. Reusable Industry Office Engine (admin-editable, no redeploy).
+4. Dynamic Stripe country selector (admin-overridable, status tiers).
+5. Auth: JWT cookies, roles (owner/admin/staff/platform_admin), lockout, MFA-ready.
+6. 20-section dashboard, grouped. White-label branding via CSS vars.
+7. AI employee that behaves like a trained employee of the specific business.
+8. Human fallback: AI never dead-ends a caller (voicemail/message/escalate/callback).
+9. Usage metering with 70/85/90/95/100% warning tiers; graceful fallback at cap.
+10. White-label customer portal + business page; custom domain via CNAME.
 
 ## Phase 1 — Shipped (Feb 2026)
-**Backend (FastAPI + Mongo)**
-- JWT cookie auth: register (bootstraps tenant), login, logout, /me, /refresh, forgot-password, reset-password + brute-force lockout.
-- 10 industry templates seeded (HVAC, plumbing, electrical, roofing, dental, PT, landscaping, pest control, contractor, independent).
-- 64 countries seeded with Stripe-aware status tiers; admin CRUD + enable/disable.
-- Tenant onboarding endpoint seeds services + knowledge from the chosen industry template.
-- Tenant-scoped CRUD for services, customers, leads, appointments, knowledge; `/tenants/summary`.
-- Platform admin endpoints (overview, tenants list + suspend, users, feature flags toggle, health).
-- Business advisor chat (GPT-6 Sol via emergentintegrations) with graceful fallback.
-- Public tenant page `/public/business/{slug}`.
-- Stripe payments (Flow A claimable sandbox): plans, checkout, status polling, webhook at `/api/stripe/webhook`.
-- Audit log collection + brute-force collection + password-reset TTL.
+- Multi-tenant auth, 10 seeded industry templates, 64 countries.
+- Business-owner dashboard shell, admin console, Stripe billing.
+- Public business page, business advisor chat (GPT-6 Sol), seed-on-onboarding.
+- **30/30 backend tests PASS.**
 
-**Frontend (React 19 + Tailwind + Shadcn)**
-- Premium dark marketing landing (bento + glass) with industries + pricing.
-- Login / Signup / Forgot / Reset flows (split-screen premium).
-- 5-step onboarding wizard with industry picker, hours table, AI tone picker.
-- Business-owner dashboard shell with grouped 20-section sidebar, tenant branding (CSS vars), tenant switcher.
-- Functional modules: Home, AI Employee tuning, Services CRUD, Customers CRUD, Leads kanban, Appointments CRUD, Knowledge Base, Business Advisor chat, Analytics KPI, Usage, Billing (Stripe), Settings (branding + public link).
-- Stub modules with "Phase 2" badges + hooks reserved: Calls, Messages, Payments, Website, Customer Portal, Reviews, Automations, Integrations, Phone Numbers.
-- Admin console: Overview KPIs, Tenants (suspend/reactivate), Industry Templates CRUD, Countries CRUD + filter + toggle, Feature Flags, System Health.
-- Public tenant business page `/b/:slug`.
-- Payment success / cancel pages.
+## Phase 2 — Shipped (Feb 2026)
+**AI Receptionist (`ai_receptionist.py`)**
+- Builds tenant-specific system prompt from industry template + knowledge + services + hours.
+- Returns JSON-structured actions: `book_appointment`, `create_lead`, `take_message`, `take_voicemail`, `escalate_to_human`, `end_call`, or plain answer.
+- Deterministic fallback branch — never leaves caller at a dead end (voicemail / escalation / graceful message when LLM fails or usage is capped).
 
-**Verified**: 30/30 backend tests passing (health, auth, industries, countries, onboarding, scoped CRUD, tenant isolation, admin RBAC, feature flags, country override, public page, Stripe plans/checkout/status, advisor chat).
+**Communications**
+- `conversations` collection + per-message log. Call simulator UI drives the exact server pipeline Twilio will later feed.
+- Outbound SMS + inbound-SMS simulator; AI auto-replies using the same playbook.
+- Missed-call text-back automation setting.
 
-## P0 backlog (next up)
-- Email verification + MFA (TOTP) flows (scaffold is in place).
-- Audit log viewer in admin.
-- Team invites + staff management inside a tenant.
+**CRM depth**
+- Estimates + Invoices with line items + public token for customer approval/view.
+- Review Autopilot: send request via SMS/email (logged in demo), customer submits via public link with star rating + comment.
+
+**Team & white-label**
+- Team invitations (owner/admin/staff) with token-based accept flow.
+- Staff listing + inline role change.
+- Custom domain CNAME wizard with DNS verify step.
+- White-label customer portal (`/portal/:slug`) — branded, service request form, booking form, FAQ, hours, services, magic-link return path.
+
+**Metering & operational**
+- Usage events for `calls`, `sms`, `ai_interactions`, `voice_seconds`, `ai_minutes` with monthly rollup.
+- `GET /api/usage/me` returns per-metric usage + 70/85/90/95/100% warning tier + exhaustion flag.
+- Automations settings: appointment reminders, review autopilot, missed-call text-back, lead follow-up timer, SMS template.
+- Tenant integrations catalog (Twilio, Gmail, Stripe, Google My Business) with per-tenant config + status derivation.
+
+**Verified**: 21/21 Phase 2 backend tests PASS.
+
+## P0 backlog (next)
+- Real Twilio inbound call bridge (TwiML → `/caller-turn` under the hood).
+- Email delivery (Resend or Gmail OAuth) for invites + review requests.
+- Appointment reminder scheduler (nightly job).
 
 ## P1 backlog
-- Twilio-powered Calls + telephony configuration.
-- Omnichannel Messages inbox.
-- Website builder with per-tenant subdomains.
-- Reviews aggregation + auto-replies.
-- Workflow automations engine.
+- OpenAI Realtime API for live speech-to-speech.
+- Portal magic-link login UI (`/portal/:slug/login`).
+- Google My Business review aggregation.
+- Stripe-powered invoice payment links.
 
 ## P2 backlog
-- SOC2 scaffolding (SSO/SAML, SCIM, secret rotation).
-- Multi-location per tenant (schema supports it; UI to come).
-- Marketplace of community industry templates.
+- SOC2 scaffolding (SSO/SAML, SCIM).
+- Multi-location per tenant (schema supports it).
+- Industry template marketplace.

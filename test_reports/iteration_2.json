@@ -1,0 +1,46 @@
+{
+  "summary": "Phase 2 backend testing complete. Added /app/backend/tests/test_phase2.py (21 tests) covering AI receptionist (start/caller-turn/escalation/fallback), SMS inbound+outbound simulators, Estimates+Invoices CRUD, Review Autopilot (tenant + public), Team Invitations (create/peek/accept/staff listing + role flip), Custom Domains (add + verify no-500), Integrations catalog + status derivation, Automations defaults + persistence, Usage /me shape with ai_interactions counted, Public Portal home/service-request/book/magic-link, and cross-tenant isolation across all new resources. 21/21 PASSED against the public preview URL on first clean run. Receptionist used LLM path for booking + emergency escalation and still returned deterministic fallback for noise input — all required behaviors verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/portal/{slug}", "issue": "Prior demo tenant 'office-engine' is no longer seeded (returns 404). Portal tests now derive slug from the registered test tenant, but if the review request expects a seeded 'office-engine' demo tenant it must be seeded on startup."},
+      {"endpoint": "POST /api/tenants/domains/{id}/verify", "issue": "Uses blocking socket.gethostbyname_ex inside an async handler — can block the event loop under load. Consider asyncio.to_thread() or dnspython async resolver. Also only reads the first alias chain; wildcard CNAME chains ending at Vercel/edge providers may be missed."},
+      {"endpoint": "POST /api/conversations/sms/send & /sms/inbound-sim", "issue": "Request body uses untyped `dict` instead of a Pydantic model — no validation of `to`/`from`/`body` shapes beyond manual checks; swap for a BaseModel."},
+      {"endpoint": "PUT /api/tenants/invitations/staff/{user_id}/role", "issue": "Role is a query string param, not a JSON body. Works but asymmetric with other PUTs. Also allows re-assigning to 'owner' with no uniqueness check (tenant could end up with multiple owners)."},
+      {"endpoint": "GET /api/portal/{slug}/me / exchange-token", "issue": "`portal_tokens.expires_at` is written as a datetime object (not isoformat), then compared with both datetime and str branches. Mongo will serialize to BSON Date — works, but inconsistent with the rest of the codebase that stores ISO strings everywhere."},
+      {"endpoint": "POST /api/tenants/reviews", "issue": "No validation that at least one of customer_phone/customer_email is provided; a request with neither will still create a review that's un-deliverable."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_phase2.py",
+    "/app/test_reports/pytest/phase2_results.xml"
+  ],
+  "action_items": [
+    "Decide whether to re-seed the demo 'office-engine' tenant on startup (previous Phase 1 had it; it's gone now). Portal/public-business tests pass by using a dynamically-created tenant, but the review request language assumes office-engine exists.",
+    "Make domain CNAME verification non-blocking (use asyncio.to_thread or an async DNS resolver).",
+    "Convert /sms/send and /sms/inbound-sim bodies to Pydantic models.",
+    "Add Pydantic body for the staff role update (and prevent demoting the only owner / promoting multiple owners).",
+    "In portal_tokens, store expires_at as ISO string for consistency.",
+    "In review request creation, require at least phone or email."
+  ],
+  "critical_code_review_comments": [
+    "receptionist graceful fallback is confirmed never-500 (tested with garbage input).",
+    "crm.py mark-paid: good — status + paid_at both set; however there is no `mark-sent` for invoices (only estimates). If the UI shows an 'Invoice sent' action it will need /tenants/invoices/{id}/send.",
+    "invitations.accept creates a user even if the tenant has been deleted (no tenant existence check); add a validation.",
+    "integrations: 'stripe' is listed in catalog with needs=[] so any upsert with enabled=True becomes 'connected' regardless of config — likely fine for a 'platform-level provisioned' integration but surface that in the UI.",
+    "portal.magic-link requires either phone or email — current spec says it 'does not leak existence' (returns 200 either way) but if both are missing it 400s. That's a correct 400, not a leak, so OK.",
+    "No rate limiting on /conversations/{id}/caller-turn — a tenant could burn ai_interactions quota very fast; `usage_capped` short-circuits inside receptionist_reply but costs a DB call per turn.",
+    "Phase 2 code adds many routes to a monolithic api; file sizes still OK (<300 LOC each) — good split per feature."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase2.py"
+  ],
+  "success_rate": {"backend": "100% (21/21)", "frontend": "not tested (backend-only)"},
+  "test_credentials": "Admin unchanged: admin@aioffice.io / AdminPass123!. Phase 2 tests register fresh TEST_ prefixed owners per module.",
+  "seed_data_creation": "Each run creates 2 TEST_ prefixed owners + their tenants (hvac industry seeded with services + knowledge), plus a handful of TEST_ estimates/invoices/reviews/invites/domains/leads/customers/appointments/conversations. Items used by assertions are deleted; residual rows all carry the TEST_ prefix for easy cleanup.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 1 suite (/app/backend/tests/backend_test.py) + Phase 2 suite (/app/backend/tests/test_phase2.py) together cover ~50 tests. Both run in parallel with 2 workers via pytest-xdist. If a Phase 3 adds new endpoints, add a test_phase3.py in the same style — use the _register_and_onboard helper pattern. Note that the 'office-engine' demo tenant from Phase 1 is no longer seeded; if you need a stable public slug, register one and remember its slug via GET /api/tenants/me.",
+  "rca of the issue": "N/A — no failures after the initial email-casing fix in the invite peek assertion (API lowercases emails on insert)."
+}
