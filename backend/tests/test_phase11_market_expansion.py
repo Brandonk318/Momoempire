@@ -91,3 +91,54 @@ class TestTenantMarketSwitching:
             timeout=15,
         )
         assert r.status_code in (401, 403)
+
+
+class TestMarketAwareOnboarding:
+    def test_onboarding_persists_selected_enabled_market(self):
+        countries = requests.get(f"{API}/countries?enabled_only=true", timeout=15).json()
+        if not countries:
+            pytest.skip("No enabled countries configured")
+        target = next(
+            (c for c in countries if (c.get("code") or "").upper() in {"CA", "AU", "NZ"}),
+            countries[0],
+        )
+        code = target["code"].upper()
+
+        s = _client()
+        email = f"TEST_onboard_market_{uuid.uuid4().hex[:8]}@example.com"
+        reg = s.post(f"{API}/auth/register", json={
+            "email": email,
+            "password": "MarketPass123!",
+            "name": "Onboard Market Tester",
+            "business_name": f"TEST Market Onboard {uuid.uuid4().hex[:6]}",
+        }, timeout=20)
+        assert reg.status_code == 200, reg.text
+
+        onboard = s.post(f"{API}/tenants/onboard", json={
+            "name": "Onboard Market Tester",
+            "industry_slug": "hvac",
+            "contact_email": email,
+            "address": {"country": code},
+        }, timeout=20)
+        assert onboard.status_code == 200, onboard.text
+        assert onboard.json()["tenant"]["country"] == code
+        assert onboard.json()["tenant"]["address"]["country"] == code
+
+    def test_onboarding_rejects_unknown_market(self):
+        s = _client()
+        email = f"TEST_onboard_bad_market_{uuid.uuid4().hex[:8]}@example.com"
+        reg = s.post(f"{API}/auth/register", json={
+            "email": email,
+            "password": "MarketPass123!",
+            "name": "Bad Market Tester",
+            "business_name": f"TEST Bad Market {uuid.uuid4().hex[:6]}",
+        }, timeout=20)
+        assert reg.status_code == 200, reg.text
+
+        onboard = s.post(f"{API}/tenants/onboard", json={
+            "name": "Bad Market Tester",
+            "industry_slug": "plumbing",
+            "contact_email": email,
+            "address": {"country": "ZZ"},
+        }, timeout=20)
+        assert onboard.status_code == 400
