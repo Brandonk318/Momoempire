@@ -101,3 +101,73 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+## user_problem_statement: "Add a safe country/market switcher to the AI Office platform so one engine can support multiple countries without exposing disabled markets."
+
+## backend:
+  - task: "Tenant market switching"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/tenants.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added PUT /tenants/me/country. It uppercases input, requires tenant owner/admin, validates the country against the enabled countries registry, persists tenant.country, and rejects unavailable markets."
+  - task: "Enabled-market registry"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/countries.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Existing GET /countries?enabled_only=true is now the source of truth for the frontend market switcher."
+
+## frontend:
+  - task: "Dashboard market switcher"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/MarketSwitcher.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added market dropdown that loads enabled markets, displays country flag/code, persists selection via /tenants/me/country, and updates dashboard tenant state."
+  - task: "Dashboard market switcher integration"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/layouts/DashboardLayout.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Wired MarketSwitcher beside LanguageSwitcher without touching main branch."
+
+## metadata:
+  created_by: "main_agent"
+  version: "1.1"
+  test_sequence: 1
+  run_ui: true
+
+## test_plan:
+  current_focus:
+    - "Tenant market switching"
+    - "Enabled-market registry"
+    - "Dashboard market switcher"
+    - "Dashboard market switcher integration"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+## agent_communication:
+  - agent: "main"
+    message: "Market expansion work is isolated on empire-market-expansion. Validate enabled-only country listing, owner country switching, rejection of disabled/unknown codes, persistence on GET /tenants/me, and dashboard dropdown behavior before merge."
