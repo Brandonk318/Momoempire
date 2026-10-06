@@ -56,6 +56,7 @@ class IndustryTemplate(BaseModel):
     recommended_integrations: List[str] = []
     recommended_website_content: List[str] = []
     industry_automations: List[str] = []
+    office_profile: Dict[str, Any] = {}
     active: bool = True
     created_at: str = Field(default_factory=_now_iso)
     updated_at: str = Field(default_factory=_now_iso)
@@ -79,6 +80,7 @@ class IndustryTemplateIn(BaseModel):
     recommended_integrations: List[str] = []
     recommended_website_content: List[str] = []
     industry_automations: List[str] = []
+    office_profile: Dict[str, Any] = {}
     active: bool = True
 
 
