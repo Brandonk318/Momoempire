@@ -25,6 +25,8 @@ export default function PublicBusiness() {
   if (err) return <div className="min-h-screen grid place-items-center text-sm text-muted-foreground">{err}</div>;
   if (!biz) return <div className="min-h-screen grid place-items-center text-sm text-muted-foreground">Loading…</div>;
 
+  const profile = biz.office_profile || {};
+
   return (
     <div className="min-h-screen bg-background" data-testid="public-business-page">
       <header className="border-b border-border">
@@ -34,13 +36,16 @@ export default function PublicBusiness() {
         </div>
       </header>
       <section className="max-w-5xl mx-auto px-6 py-16">
-        <div className="overline mb-3">{biz.industry_slug}</div>
+        <div className="overline mb-3">{profile.office_name || biz.industry_slug}</div>
         <h1 className="font-display text-5xl md:text-6xl tracking-tight">{biz.name}</h1>
-        {biz.description && <p className="text-lg text-muted-foreground mt-4 max-w-2xl">{biz.description}</p>}
+        <p className="text-lg text-muted-foreground mt-4 max-w-2xl">
+          {profile.hero || biz.description || "Your business, available when customers need you."}
+        </p>
+        {profile.tagline && <p className="text-sm text-muted-foreground mt-3 max-w-2xl">{profile.tagline}</p>}
 
         <div className="mt-8 flex flex-wrap gap-3">
           {biz.contact_phone && (
-            <Button className="btn-tenant h-11" asChild><a href={`tel:${biz.contact_phone}`} data-testid="public-call-btn"><Phone className="h-4 w-4 mr-2" />Call us</a></Button>
+            <Button className="btn-tenant h-11" asChild><a href={`tel:${biz.contact_phone}`} data-testid="public-call-btn"><Phone className="h-4 w-4 mr-2" />{profile.cta || "Call us"}</a></Button>
           )}
           {biz.contact_email && (
             <Button variant="outline" className="h-11" asChild><a href={`mailto:${biz.contact_email}`}><Mail className="h-4 w-4 mr-2" />Email</a></Button>
@@ -49,6 +54,14 @@ export default function PublicBusiness() {
             <Button variant="outline" className="h-11" asChild><a href={biz.website} target="_blank" rel="noreferrer"><Globe className="h-4 w-4 mr-2" />Website</a></Button>
           )}
         </div>
+
+        {(profile.value_props || []).length > 0 && (
+          <div className="grid md:grid-cols-2 gap-4 mt-12" data-testid="niche-value-props">
+            {profile.value_props.map((item) => (
+              <div key={item} className="surface p-5 text-sm font-medium">{item}</div>
+            ))}
+          </div>
+        )}
 
         <div className="grid md:grid-cols-3 gap-5 mt-16">
           <div className="surface p-6">
