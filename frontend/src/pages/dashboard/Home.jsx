@@ -21,11 +21,17 @@ export default function Home() {
   const { user } = useAuth();
   const [sum, setSum] = useState(null);
   const [tenant, setTenant] = useState(null);
+  const [industry, setIndustry] = useState(null);
   const [opps, setOpps] = useState([]);
 
   useEffect(() => {
     api.get("/tenants/summary").then((r) => setSum(r.data)).catch(() => {});
-    api.get("/tenants/me").then((r) => setTenant(r.data)).catch(() => {});
+    api.get("/tenants/me").then((r) => {
+      setTenant(r.data);
+      if (r.data?.industry_slug) {
+        api.get(`/industries/${r.data.industry_slug}`).then((industryRes) => setIndustry(industryRes.data)).catch(() => {});
+      }
+    }).catch(() => {});
     api.get("/tenants/pipeline/opportunities").then((r) => setOpps(r.data.items || [])).catch(() => {});
   }, []);
 
@@ -34,13 +40,26 @@ export default function Home() {
       <PageHeader
         eyebrow="Workspace"
         title={`Good day, ${user?.name?.split(" ")[0] || "there"}.`}
-        description={tenant ? `${tenant.name} · ${tenant.industry_slug || "set up your industry"}` : "Welcome to your AI Office."}
+        description={tenant ? `${tenant.name} · ${industry?.office_profile?.office_name || tenant.industry_slug || "set up your industry"}` : "Welcome to your AI Office."}
         actions={
           <Link to="/app/advisor">
             <Button className="btn-tenant" data-testid="home-advisor-btn"><Sparkles className="h-4 w-4 mr-2" />Ask the Advisor</Button>
           </Link>
         }
       />
+
+      {industry?.office_profile && (
+        <div className="mb-6 surface p-5" data-testid="home-niche-office">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <div className="overline">Your niche Office</div>
+              <div className="font-display text-2xl mt-1">{industry.office_profile.office_name}</div>
+              <p className="text-sm text-muted-foreground mt-1">{industry.office_profile.tagline}</p>
+            </div>
+            <Badge variant="secondary">{industry.office_profile.cta}</Badge>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <KPI label="Leads" value={sum?.leads} icon={Target} testId="kpi-leads" />
