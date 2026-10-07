@@ -313,3 +313,17 @@
       - working: "NA"
         agent: "main"
         comment: "After a market switch, the in-memory tenant state now updates both tenant.country and tenant.address.country immediately so locale-sensitive UI does not display stale address-country data before the next server refetch."
+
+
+## backend:
+  - task: "Rejected/normalized market switch regression guard"
+    implemented: true
+    working: "NA"
+    file: "backend/tests/test_phase11_market_expansion.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added regression coverage proving a rejected market change does not mutate tenant.country or tenant.address.country, and that normalized country codes persist to both fields after a valid switch."
