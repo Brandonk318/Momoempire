@@ -130,7 +130,11 @@ async def set_my_country(data: CountryPreferenceIn, user: dict = Depends(require
         raise HTTPException(400, "Country is not enabled for this platform")
     await db.tenants.update_one(
         {"id": user["tenant_id"]},
-        {"$set": {"country": code, "updated_at": _now_iso()}},
+        {"$set": {
+            "country": code,
+            "address.country": code,
+            "updated_at": _now_iso(),
+        }},
     )
     return {"ok": True, "country": code}
 
