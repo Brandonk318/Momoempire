@@ -203,14 +203,57 @@ The MongoDB cluster is untouched by this round — no schema changes, no migrati
 1. **Call-to-payment vertical flow** (Stripe Connect Standard, direct charges). Will land in the same `cloudflare-ready` branch in Round 2.
 2. **Spanish finish + voice demo**. Round 3.
 
-## Exact next steps for Round 2 (call-to-payment)
+## Round 2 — Call-to-payment vertical (branch: `call-to-payment`, this commit)
 
-- Add collections: `quotes`, `jobs`, `invoices`, `payments`, `connect_accounts`.
-- `routers/quotes.py` (draft → owner approve → customer accept via portal) linked to the existing lead/customer/service models.
-- `routers/connect.py` → `/api/connect/onboard` (Standard account link) + `/api/connect/status`.
-- Reuse existing `/api/stripe/webhook` with idempotency store keyed on `event.id`; add Connect `account.updated`, `invoice.paid`, `charge.dispute.created` branches.
-- Deposits = partial charges with `payment_intent.capture_method=automatic` + a remaining-balance invoice created on acceptance.
-- Overdue-reminder cron (daily) scans unpaid invoices, respects `paused_at` and `settings.max_reminders`.
-- Owner dashboard section: "Needs attention" aggregator (query union of pending quotes + overdue invoices + failed webhooks).
+**New endpoints under `/api/c2p/*` (owner-auth) and `/api/public/c2p/*` (customer-facing):**
 
-I'll start Round 2 the moment you click **Save to GitHub** and confirm.
+| Route | Purpose |
+|---|---|
+| `POST /c2p/connect/onboard` | Create or reuse Stripe Standard connected account, return hosted onboarding link |
+| `GET  /c2p/connect/status` | Live Stripe `charges_enabled` / `payouts_enabled` + requirements_due |
+| `POST /c2p/connect/disconnect` | Clear connected account from tenant |
+| `POST /c2p/quotes/draft` | Draft a quote. Line prices are pulled from the tenant's own `services` catalog — the AI/caller **cannot invent prices**. Owner may add `extra_lines` by hand. De-dupes customer by email/phone. |
+| `GET  /c2p/quotes` | List quotes (owner), optional `?status=` filter |
+| `POST /c2p/quotes/{id}/decision` | **Owner approval gate.** `approve_and_send` sets status=`sent` and emails the customer a public link; `reject` sets status=`declined`. |
+| `GET  /public/c2p/quotes/{token}` | Customer-facing quote (no auth); hides owner notes |
+| `POST /public/c2p/quotes/{token}/accept` | Customer accepts → creates `appointment` (job) + `invoice`; **idempotent** (double-accept returns the same invoice with `{idempotent:true}`); 400 if not approved |
+| `POST /c2p/jobs/complete` | Mark appointment completed; flips invoice state for full-balance billing |
+| `GET  /c2p/invoices` | Owner invoice list with `amount_due_cents` computed |
+| `GET  /public/c2p/invoices/{token}` | Customer-facing invoice (no auth) |
+| `POST /public/c2p/invoices/{token}/pay` | Create Stripe PaymentIntent on the tenant's CONNECTED account (**direct charge** via `stripe_account=`), supports partial payments; 503 if tenant hasn't onboarded |
+| `PUT  /c2p/invoices/{id}/reminders` | Pause/resume reminders, cap `max_reminders` |
+| `POST /cron/overdue-reminders` | Daily cron (14:15 UTC). Scans unpaid invoices past `due_at`; emails reminder; respects `reminders_paused_at` and `max_reminders`; stops automatically on payment |
+| `GET  /c2p/needs-attention` | Dashboard aggregator: `{pending_quotes, awaiting_customer_quotes, overdue_invoices, unpaid_invoices, failed_payments, unassigned_leads}` |
+
+**Stripe Connect webhook** at `/api/stripe/connect-webhook` — separate signing secret `STRIPE_CONNECT_WEBHOOK_SECRET` (falls back to `STRIPE_WEBHOOK_SECRET`). Handles:
+- `payment_intent.succeeded` → increments `amount_paid_cents`, flips to `paid` when full, sets `paid_at` + `reminders_paused_at` (stops reminders)
+- `payment_intent.payment_failed` → records failure on `invoice_payments`
+- `charge.refunded` → decrements paid, drops back to `sent` if balance exists, clears `reminders_paused_at`
+- `charge.dispute.created` → stamps `dispute_id`, `disputed_at`
+- `account.updated` → updates `tenant.stripe_connect_status`
+- **Duplicate-safety**: each `event.id` is upserted into `webhook_events` with a unique `_id` index. A dup returns `{ok:true, duplicate:true}` without re-running state.
+
+**Platform subscriptions vs. customer payments — kept fully separate:**
+- Platform subscription webhooks → `/api/stripe/webhook` (unchanged, uses `STRIPE_WEBHOOK_SECRET`, writes to `payment_transactions`).
+- Customer→tenant payments → `/api/stripe/connect-webhook` (new, direct charges on connected accounts, writes to `invoices` + `invoice_payments`). No commingling.
+
+### What's tested (iteration_11.json)
+**31/31 pytest cases, 100% pass.** Coverage includes grounded quote drafting, customer dedupe, owner approval gate (incl. 400 on re-decide), notes hidden from customer, acceptance idempotency (double-accept returns same invoice), 400 on non-approved acceptance, job completion, PaymentIntent 503 without Connect, Connect-onboarding 503 with actionable message, webhook signature enforcement, webhook idempotency (duplicate event.id), full-payment transition, failed-payment attempt recording with correct tenant_id, refund rollback + reminder resume, dispute stamping, overdue cron under auth + status transition, reminder pause/resume, needs-attention aggregator, and strict **workspace isolation** between two tenants (quotes/invoices/needs-attention all scoped; cross-tenant actions return 404).
+
+### What's NOT verified in this round (explicit blockers)
+| Item | Why unverified | Reproduce / fix |
+|---|---|---|
+| Live `connect/onboard` returning a Stripe hosted link | The preview's Stripe test account has **not enabled Connect**. The API returns a clean 503 with instructions. | Enable Connect at https://dashboard.stripe.com/connect in your Stripe test account, then retry. |
+| Live `PaymentIntent.create` on a real connected account | Depends on an onboarded tenant. | Complete the hosted onboarding and re-run `POST /public/c2p/invoices/{token}/pay`. |
+| Real-world Stripe webhook delivery | Covered by signed-synthetic-event tests, not by a live Stripe push. | Point Stripe CLI (`stripe listen --forward-to .../api/stripe/connect-webhook`) during QA. |
+
+### Exact remaining steps for Round 3 (Spanish-voice-finish)
+1. Finish translating the remaining dashboard pages (`Billing`, `Analytics`, `Automations`) with the i18n keys already in `src/i18n/locales/{en,es}.json` from Round 1.
+2. Add Spanish strings for the new c2p flow (quote email, customer portal, overdue reminder — the overdue cron already branches on `tenant.lang`).
+3. Replace the text-only homepage demo with a WebRTC voice demo (needs `OPENAI_API_KEY` or an ElevenLabs real-time key — user to provide).
+
+### Branch combination (unchanged from the top of this doc)
+```
+cloudflare-ready → call-to-payment → spanish-voice-finish
+```
+Round 2 is additive and does not touch anything from Round 1. Rebase order recommended.

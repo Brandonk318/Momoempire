@@ -121,3 +121,12 @@ All four phases ship as **one coherent multi-tenant platform**. Adding a new ind
 - P2: Vector embeddings for knowledge docs; CNAME active verification; push to github.com/momoempire/Momoempire.
 - P3: Real WebRTC voice demo on landing (currently text).
 
+
+### Phase 12 — Call-to-Payment vertical (Feb 2026, branch `call-to-payment`) ✅
+- **Stripe Connect Standard, direct charges** per tenant's connected account; platform subscriptions remain separate on `/api/stripe/webhook`.
+- Full flow endpoints under `/api/c2p/*` and `/api/public/c2p/*`: quote draft (grounded on `services`, owner can add extras) → owner approval gate (emails public link) → customer accept (creates appointment + invoice, idempotent) → job complete → PaymentIntent on connected account (partial supported) → signed Connect webhook (`payment_intent.succeeded|payment_failed|charge.refunded|charge.dispute.created|account.updated`) with duplicate-safety via `webhook_events` unique `_id` index.
+- Overdue cron at `/api/cron/overdue-reminders` (daily 14:15 UTC); stops on payment; `max_reminders` + `reminders_paused_at` honored; bilingual EN/ES copy via `tenant.lang`.
+- Needs-attention aggregator `GET /c2p/needs-attention` for the owner dashboard.
+- Platform subscription vs. tenant-payment separation documented in `HANDOFF.md`.
+- **Testing**: iteration_11.json — 31/31 backend pytest cases pass; workspace isolation verified across two tenants.
+- **Known blockers**: live Connect onboarding + live PaymentIntent require enabling Connect in the Stripe dashboard (preview test account hasn't; API returns actionable 503).
