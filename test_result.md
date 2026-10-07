@@ -299,3 +299,17 @@
       - working: "NA"
         agent: "main"
         comment: "Fixed market switching so tenant.country and tenant.address.country update together. Added regression coverage asserting both persist after a market change."
+
+
+## frontend:
+  - task: "Immediate market switch state synchronization"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/MarketSwitcher.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "After a market switch, the in-memory tenant state now updates both tenant.country and tenant.address.country immediately so locale-sensitive UI does not display stale address-country data before the next server refetch."
