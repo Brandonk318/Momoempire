@@ -1,4 +1,182 @@
+# HANDOFF — AI Office Platform (Rounds 1 & 2 complete)
+
+> **Resume here.** Rounds 1 (Cloudflare prep) and 2 (call-to-payment) are **code-complete and committed locally**. Nothing has been pushed to GitHub, deployed, or purchased. Round 3 (Spanish/voice) is **not started**.
+
+## Final status snapshot — what the agent did
+
+| | Branch target (your plan) | Local commit SHA | Status |
+|---|---|---|---|
+| Round 1 — Cloudflare prep | `cloudflare-ready` | **`54d84cf`** (checkpoint at round complete) | Code committed, tested in-preview, not pushed |
+| Round 2 — Call-to-payment | `call-to-payment` | **`e6dc83f`** (current HEAD) | Code committed, 31/31 pytest, not pushed |
+| Round 3 — Spanish / voice | `spanish-voice-finish` | — | **Not started.** No commits. |
+| Round 0 — Phase 11 (prior) | — | `dd1d2db` | Already in your history. |
+
+Local branch state: **only `main` exists in `/app`.** All my commits sit linearly on top of the previous Phase 11 head. The three-branch split you asked for happens **after** you click Save to GitHub (see below).
+
+## What is saved vs. what still needs your click
+
+### Saved locally in `/app` (auto-committed by Emergent after each turn)
+- ✅ `backend/llm_portable.py`, `backend/routers/health_deploy.py`, `backend/routers/call_to_payment.py`
+- ✅ Edits to `backend/server.py`, `backend/ai_receptionist.py`, `backend/ai_insights.py`, and 5 other routers (import swap only)
+- ✅ `backend/Dockerfile`, `backend/.dockerignore`, `docker-compose.yml`
+- ✅ `frontend/public/_redirects`, `frontend/public/_headers`, `wrangler.toml`
+- ✅ `.emergent/crons.yml` (overdue-reminders + repeat-reminders schedules)
+- ✅ `/app/HANDOFF.md`, `/app/memory/PRD.md`, `/app/memory/test_credentials.md`
+- ✅ `backend/tests/test_call_to_payment.py`, `backend/tests/test_iteration10_cloudflare_prep.py`
+- ✅ `test_reports/iteration_10.json`, `test_reports/iteration_11.json`
+
+### Still needs YOU to click "Save to GitHub" in the chat input
+I do **not** have `git push` rights from this environment. Everything above lives only on this pod until you push.
+
+## How to save to the three branches you want
+
+> Reality check: Emergent's **Save to GitHub** button pushes the current `main` **as-is** to the branch name you pick. All my commits are already on local `main`; I cannot split them into three branches from here. Pick ONE of the two options below.
+
+### Option A — Simplest (recommended): one combined branch now, split later if needed
+
+1. Click **Save to GitHub** in the chat input.
+2. Target branch: `cloudflare-and-call-to-payment` (or `empire-market-expansion-rounds-1-2`).
+3. Open a PR against `main` on GitHub. Review by commit (the Round 1 and Round 2 boundaries at SHAs `54d84cf` and `e6dc83f` are clean checkpoints).
+4. Leave `main` and `empire-market-expansion` **untouched** on GitHub — nothing in this handoff is destined for either.
+
+If you later want the formal three-branch split, do it from your laptop after the push:
+```bash
+git fetch origin
+git checkout -b cloudflare-ready 54d84cf    # or the matching SHA on your remote
+git push origin cloudflare-ready
+git checkout -b call-to-payment e6dc83f
+git push origin call-to-payment
+```
+
+### Option B — Three branches via the UI, one at a time
+If the Save to GitHub button supports choosing which commit to push, click it three times:
+1. First push → branch `cloudflare-ready`, cutoff at commit `54d84cf`.
+2. Second push → branch `call-to-payment`, cutoff at commit `e6dc83f`.
+3. Round 3 branch (`spanish-voice-finish`) is not yet created; skip.
+
+If the button only pushes HEAD, use Option A — the branch split is a safe post-push `git` operation.
+
+## Round 3 — unfinished work (next session's starting point)
+
+### 3a. Finish Stripe test-mode verification (can be done on current infra, no money)
+- [ ] Enable Connect at https://dashboard.stripe.com/connect in your **test** Stripe account (the one already in `STRIPE_SECRET_KEY`).
+- [ ] Call `POST /api/c2p/connect/onboard` — expect a real hosted link now instead of 503.
+- [ ] Walk through the Stripe hosted onboarding form (test data auto-approve).
+- [ ] Call `POST /api/public/c2p/invoices/{token}/pay` with the test invoice — expect a `client_secret`.
+- [ ] Run `stripe listen --forward-to <preview>/api/stripe/connect-webhook` and complete a test card charge (4242 4242 4242 4242). Confirm invoice flips to `paid` live.
+- [ ] Verify refund flow with `stripe refunds create`.
+
+### 3b. Spanish translations (framework already in place; keys exist)
+- [ ] `frontend/src/pages/dashboard/Billing.jsx` — replace hardcoded strings with keys from `src/i18n/locales/en.json` (`billing.*`).
+- [ ] `frontend/src/pages/dashboard/Analytics.jsx` — use `analytics.*` keys (already defined in `en.json`).
+- [ ] `frontend/src/pages/dashboard/Automations.jsx` — use `automations.*` keys.
+- [ ] `frontend/src/pages/PublicBusiness.jsx` — use `public_business.*` keys (already defined), add the testimonials carousel block.
+- [ ] Add equivalent entries to `src/i18n/locales/es.json` for the keys above (currently only `en.json` has them).
+- [ ] Localize the new Round 2 emails (quote-sent and overdue-reminder — the overdue cron already branches on `tenant.lang`).
+
+### 3c. Live homepage voice demo (deferred by prior decision)
+- [ ] Replace the text-only `components/DemoCall.jsx` chat with a WebRTC voice path.
+- [ ] Needs: `OPENAI_API_KEY` **or** an ElevenLabs/Deepgram realtime key — ask the user.
+- [ ] Add a browser `getUserMedia` mic flow, streaming to the chosen realtime API, output played via Web Audio.
+- [ ] Keep the current text demo as a fallback for browsers that deny mic.
+
+### 3d. Nice-to-haves surfaced during Round 2
+- Testimonials carousel on `/b/:slug` (keys already exist in `en.json`; needs ES + the React component).
+- Owner UI pages for `/c2p/quotes`, `/c2p/invoices`, and `/c2p/needs-attention` (API complete; no frontend yet).
+- Customer portal pages for `/q/:token` and `/i/:token` (the two public API endpoints are live and already linked from emails).
+
+## Deployment & env — commands only, no secrets
+
+### Frontend → Cloudflare Pages
+```bash
+# Cloudflare dashboard → Pages → Create → Connect to GitHub → momoempire/Momoempire
+# Choose branch: whatever you push in step above
+# Build command:  cd frontend && yarn install --frozen-lockfile && yarn build
+# Build output:   frontend/build
+# Env vars (Production):
+#   REACT_APP_BACKEND_URL = https://api.your-domain.com     ← no secret, just URL
+```
+
+### Backend → Docker on Oracle Free ARM / Fly / Hetzner / any VM
+```bash
+cd backend
+cp .env.example .env            # fill locally; NEVER commit
+docker build -t ai-office-backend .
+docker run -d --name aio --env-file .env -p 8001:8001 ai-office-backend
+# Smoke check:
+curl -fsS https://api.your-domain.com/api/health/deployment
+# Expected: {"ready": true, "db_ok": true, "tenant_isolation_ok": true, "missing_required": []}
+```
+
+### Required env variable names (values live only in your dashboard)
+```
+MONGO_URL
+DB_NAME
+JWT_SECRET
+CORS_ORIGINS
+FRONTEND_URL
+ADMIN_EMAIL
+ADMIN_PASSWORD
+WEBHOOK_CRON_SECRET
+```
+### AI (one of)
+```
+EMERGENT_LLM_KEY   # if staying on Emergent
+OPENAI_API_KEY     # if going fully off-platform
+```
+
 ## Branch structure (your three-branch plan)
+
+### Payments (platform account for subscriptions)
+```
+STRIPE_SECRET_KEY
+STRIPE_PUBLISHABLE_KEY
+STRIPE_WEBHOOK_SECRET
+```
+### Payments (Connect — tenant payments)
+```
+STRIPE_CONNECT_WEBHOOK_SECRET   # optional; falls back to STRIPE_WEBHOOK_SECRET
+```
+### Email (one of)
+```
+EMERGENT_EMAIL_KEY
+RESEND_API_KEY
+```
+### Voice / SMS (optional)
+```
+TWILIO_ACCOUNT_SID
+TWILIO_AUTH_TOKEN
+TWILIO_PHONE_NUMBER
+```
+
+Full list and purpose: `backend/.env.example` (checked in, no values).
+
+## Testing summary
+
+| Report | Scope | Result |
+|---|---|---|
+| `test_reports/iteration_9.json` | Phase 11 (repeat/testimonials/Spanish) | 100% |
+| `test_reports/iteration_10.json` | Cloudflare prep regression | 7/7 pass |
+| `test_reports/iteration_11.json` | Round 2 call-to-payment | 31/31 pass, workspace isolation verified |
+
+Local pytest sidecars: `backend/tests/test_iteration10_cloudflare_prep.py`, `backend/tests/test_call_to_payment.py`.
+
+## Known / explicit blockers
+
+- **Stripe Connect not enabled on the preview's test account.** Live onboarding + PaymentIntent create return actionable 503. Fix is in your Stripe dashboard, not in code.
+- **Oracle Always Free ARM availability is unverified.** If capacity is refused in your region, use the Hetzner CX22 fallback (~$4.15/mo). Still inside the $15 cap.
+- **MongoDB Atlas M0 has a hard 512 MB cap** with no reliably-cheap upgrade step; plan a self-hosted Mongo migration before you breach it.
+- **R2 op caps can bite before storage.** Add CDN caching on any chatty read path.
+
+## Hosting budget (unchanged, re-affirmed, no automatic upgrades anywhere)
+
+See the detailed table further down this file. One-line summary:
+
+**Target ≤ $15/mo for hosting + DB + storage.** Baseline is $0/mo on Cloudflare Pages + Oracle Always Free + Atlas M0 + R2 free tier. Fallback hosting if Oracle is unavailable: Hetzner CX22 at ~$4.15/mo. Variable AI/voice/email/payment fees are tracked separately and are not part of the $15 cap. No paid resources are provisioned by this codebase.
+
+---
+
+
 
 | Branch | Scope | Status |
 |---|---|---|
