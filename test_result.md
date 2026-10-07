@@ -285,3 +285,17 @@
 ## agent_communication:
   - agent: "main"
     message: "Niche profile unit coverage is now green (3/3). Remaining validation priority is deployed onboarding/dashboard behavior plus authenticated tenant market switching."
+
+
+## backend:
+  - task: "Market/address country synchronization"
+    implemented: true
+    working: "NA"
+    file: "backend/routers/tenants.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Fixed market switching so tenant.country and tenant.address.country update together. Added regression coverage asserting both persist after a market change."
