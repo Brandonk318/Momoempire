@@ -166,6 +166,24 @@ export default function Onboarding() {
                   ))}
                 </div>
               </div>
+              {form.industry_slug && industries.find((ind) => ind.slug === form.industry_slug)?.office_profile && (() => {
+                const profile = industries.find((ind) => ind.slug === form.industry_slug).office_profile;
+                return (
+                  <div className="rounded-xl border border-border bg-muted/40 p-4" data-testid="onb-niche-preview">
+                    <div className="overline">Your Office setup</div>
+                    <div className="font-display text-xl mt-1">{profile.office_name}</div>
+                    <p className="text-sm text-muted-foreground mt-1">{profile.tagline}</p>
+                    <div className="mt-3 grid gap-1.5 text-xs text-muted-foreground">
+                      {profile.value_props?.slice(0, 3).map((value) => (
+                        <div key={value} className="flex gap-2">
+                          <Check className="h-3.5 w-3.5 mt-0.5 shrink-0 text-emerald-600" />
+                          <span>{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="space-y-1.5">
                 <Label>One-liner about your business</Label>
                 <Textarea rows={3} value={form.description} onChange={upd("description")} placeholder="Family-owned HVAC serving metro Phoenix since 2008." data-testid="onb-description-input" />
