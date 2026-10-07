@@ -225,3 +225,45 @@
       - working: "NA"
         agent: "main"
         comment: "Public business pages now use the niche Office name, niche hero/tagline, niche CTA, and niche value-proposition cards for the first three launch verticals."
+
+
+## frontend:
+  - task: "Niche-aware onboarding preview"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/Onboarding.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Onboarding now shows the selected niche Office name, tagline, and top niche value propositions for HVAC, plumbing, and pest control."
+  - task: "Niche-aware dashboard home"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/dashboard/Home.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Dashboard now fetches the tenant industry profile and shows the niche Office identity and CTA in the home experience."
+
+## backend:
+  - task: "Launch niche profile API regression coverage"
+    implemented: true
+    working: "NA"
+    file: "backend/tests/test_phase11_market_expansion.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Expanded API tests to verify all three launch niches appear in the active industry list and keep distinct office names, taglines, CTAs, hero copy, and value propositions."
+
+## agent_communication:
+  - agent: "main"
+    message: "Next validation should cover the new niche onboarding preview and dashboard card for HVAC, plumbing, and pest control, plus rerun the Phase 11 API tests for market switching and niche profile regression coverage."
