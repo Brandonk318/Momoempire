@@ -39,7 +39,11 @@ export default function MarketSwitcher({ tenant, onTenantChange, compact = false
     try {
       await api.put("/tenants/me/country", { country: next });
       try { localStorage.setItem("aiop_market", next); } catch {}
-      onTenantChange?.((prev) => ({ ...(prev || {}), country: next }));
+      onTenantChange?.((prev) => ({
+        ...(prev || {}),
+        country: next,
+        address: { ...((prev || {}).address || {}), country: next },
+      }));
     } finally {
       setSaving(false);
     }
