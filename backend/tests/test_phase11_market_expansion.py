@@ -61,6 +61,7 @@ class TestTenantMarketSwitching:
         me = owner_client.get(f"{API}/tenants/me", timeout=15)
         assert me.status_code == 200, me.text
         assert me.json()["country"] == code
+        assert (me.json().get("address") or {}).get("country") == code
 
     def test_country_code_is_normalized(self, owner_client):
         countries = requests.get(f"{API}/countries?enabled_only=true", timeout=15).json()
