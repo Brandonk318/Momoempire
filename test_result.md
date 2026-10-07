@@ -267,3 +267,21 @@
 ## agent_communication:
   - agent: "main"
     message: "Next validation should cover the new niche onboarding preview and dashboard card for HVAC, plumbing, and pest control, plus rerun the Phase 11 API tests for market switching and niche profile regression coverage."
+
+
+## backend:
+  - task: "Launch niche profile unit tests"
+    implemented: true
+    working: true
+    file: "backend/tests/test_niche_profiles_unit.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Executed the pure niche-profile unit suite locally from the exact branch logic: 3 tests passed in 0.05s. Verified distinct launch identities, complete customer-facing fields, case-insensitive lookup, and safe unknown/empty handling."
+
+## agent_communication:
+  - agent: "main"
+    message: "Niche profile unit coverage is now green (3/3). Remaining validation priority is deployed onboarding/dashboard behavior plus authenticated tenant market switching."
