@@ -158,3 +158,30 @@ class TestLaunchNicheProfiles:
         assert profile.get("hero")
         assert profile.get("cta")
         assert len(profile.get("value_props") or []) >= 4
+
+
+    def test_industry_list_exposes_profiles_for_all_launch_niches(self):
+        r = requests.get(f"{API}/industries?active_only=true", timeout=15)
+        assert r.status_code == 200, r.text
+        rows = {row.get("slug"): row for row in r.json()}
+        expected = {
+            "hvac": "The HVAC Office",
+            "plumbing": "The Plumbing Office",
+            "pest-control": "The Pest Control Office",
+        }
+        for slug, office_name in expected.items():
+            assert slug in rows, f"{slug} missing from active industries"
+            profile = rows[slug].get("office_profile") or {}
+            assert profile.get("office_name") == office_name
+            assert len(profile.get("value_props") or []) >= 4
+
+    def test_launch_profiles_have_distinct_customer_facing_copy(self):
+        profiles = []
+        for slug in ("hvac", "plumbing", "pest-control"):
+            r = requests.get(f"{API}/industries/{slug}", timeout=15)
+            assert r.status_code == 200, r.text
+            profiles.append(r.json()["office_profile"])
+        assert len({p["office_name"] for p in profiles}) == 3
+        assert len({p["tagline"] for p in profiles}) == 3
+        assert len({p["cta"] for p in profiles}) == 3
+        assert len({p["hero"] for p in profiles}) == 3
