@@ -112,24 +112,52 @@ rm backend/llm_portable.py backend/routers/health_deploy.py \
 
 The MongoDB cluster is untouched by this round — no schema changes, no migrations, no data moves.
 
-## Monthly cost estimate (low usage, test tier)
+## Monthly cost — hosting + DB + storage ONLY (≤ $15/mo target, no trial credits counted)
 
-| Line | Service | Est. $/mo |
+**Recommended stack: $0/mo hosting.** All items below are permanent free-forever tiers, NOT trial credits.
+
+| Line | Service | Permanent allowance | $/mo | Overage risk |
+|---|---|---|---|---|
+| Frontend | **Cloudflare Pages — Free** | 500 builds/mo, unlimited bandwidth, 100 custom domains, 1 build at a time, 20k files/project | **$0** | None (Pages has no bandwidth overage); build cap resets monthly |
+| Backend | **Oracle Cloud — Always Free (ARM Ampere A1)** | 4 OCPU + 24 GB RAM across up to 4 VMs, 200 GB block storage, 10 TB egress/mo — [docs](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm) | **$0** | Oracle may reclaim an idle Ampere instance if region is capacity-constrained — mitigate by (a) sending traffic to keep it warm, (b) running a `supervisor` watchdog, (c) keeping a snapshot. Not a trial. |
+| Database | **MongoDB Atlas M0 — Free Forever** | 512 MB storage, shared vCPU, shared RAM, 100 max connections, 100 ops/sec sustained | **$0** | Hard 512 MB cap. If you breach it the cluster goes **read-only** until you upgrade (next tier M2 is $9/mo, M10 is ~$57/mo — explicitly off-budget). |
+| File storage | **Cloudflare R2 — Free class** | 10 GB storage, 1 M Class A ops/mo (writes), 10 M Class B ops/mo (reads), **zero egress fees** | **$0** | Past 10 GB: $0.015/GB·mo. Past op caps: $4.50 / M writes, $0.36 / M reads. |
+| **Hosting total** | — | — | **$0** | **~$5 only if you fail over** (see fallbacks below) |
+
+### Fallback if Oracle Always Free isn't available (region waitlist, policy, etc.)
+
+| Replacement | $/mo | Note |
 |---|---|---|
-| Frontend hosting | Cloudflare Pages (free tier is enough; Paid is $5) | $0–5 |
-| Backend hosting | Oracle Cloud Free (ARM Ampere, 24 GB RAM) | $0 |
-| &nbsp; | _or_ Fly.io shared-cpu-1x | $5 |
-| &nbsp; | _or_ Render Starter | $7 |
-| Database | MongoDB Atlas M0 Free (512 MB) | $0 |
-| &nbsp; | upgrade: M10 shared when > 512 MB | $9 |
-| **Platform subtotal** | — | **$0–20** |
-| LLM | OpenAI gpt-4o-mini (~1M input tokens, 300k output) | $3–8 |
-| Voice/SMS | Twilio minutes + SMS (varies with usage) | ~$1 per 100 min |
-| Email | Resend 3k/mo free, then $20/mo | $0–20 |
-| Payments | Stripe fees are per-transaction, no monthly | — |
-| **Variable subtotal (demo-level)** | — | **$5–30** |
+| **Hetzner CX22** (2 vCPU, 4 GB RAM, 40 GB SSD, EU/US) | **€3.79 ≈ $4.15** | Honest pay-as-you-go, no trial, no sleep. Still inside $15 cap. |
+| Fly.io `shared-cpu-1x @ 256 MB`, 1 machine, auto-stop | **~$2** at 50% uptime | Hobby plan, pay-as-you-go. Sleeps when idle, cold-start ~1s. |
+| Railway Hobby | **$5** | Includes $5 of usage; past that, pay-per-second. Hard to predict → **not recommended** for a budget cap. |
+| Render Starter | **$7** | Reliable but closer to the ceiling → fallback only. |
 
-Totals: **~$5–50/mo at low usage**, cleanly within the $5 Cloudflare Paid base plus a tiny backend box.
+**Worst-case hosting with fallback = $4–7/mo. Still ≤ $15.**
+
+### Items I explicitly ruled out
+- **Render Starter at $7** + Atlas M10 at $57 → off-budget, excluded.
+- **Fly Launch plan with managed Postgres** → off-budget.
+- **Vercel/Netlify Pro** → off-budget.
+- **MongoDB Atlas M2 at $9/mo** → kept as the one-step overage path only, not the baseline.
+- **Any 30-day free trial credit** (Google Cloud, AWS, Azure, DigitalOcean $200) → NOT counted; those run out.
+
+### Variable fees — separate from hosting, usage-driven
+
+| Line | Who collects | Floor | Note |
+|---|---|---|---|
+| LLM (OpenAI gpt-4o-mini) | OpenAI | **$0** (pay-per-token) | ~$0.15 / 1 M input tokens, $0.60 / 1 M output. 100 demo conversations ≈ ~$0.10. |
+| LLM (if staying on Emergent) | Emergent Universal Key | $0 base, pre-paid balance | Same models, Emergent-brokered pricing. |
+| Voice & SMS | Twilio | $1/mo per phone number + per-minute/per-SMS | US local voice $0.0085/min inbound, SMS $0.0083 each. |
+| Email | Resend | $0 for 3k emails/mo; $20/mo for 50k | Or free via Emergent-managed Resend already provisioned. |
+| Payment processing | Stripe | 2.9% + $0.30 per card charge | Direct charges with Connect Standard — tenants pay this on their revenue, not you. |
+
+**These are revenue-coupled, not fixed overhead. Hosting + DB + storage stays at $0–5/mo at low usage.**
+
+### Blockers / what to watch
+- **Atlas M0 → read-only at 512 MB.** When `health_deploy.counts.*` grows into the hundreds of thousands, migrate to M2 ($9) or an Oracle self-hosted Mongo (free, requires ops effort). Add a monthly alert.
+- **Oracle Ampere reclamation.** Keep weekly backups of `MONGO_URL` data via `mongodump` to R2 (fits in the free 10 GB).
+- **Twilio toll fraud.** Enable Twilio's "Voice Geographic Permissions" to only allow dial-out to your countries — one accidental international loop can cost more than a year of hosting.
 
 ## Not in this round (deferred by your explicit priority)
 
