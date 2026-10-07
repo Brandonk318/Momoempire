@@ -240,7 +240,7 @@ async def receptionist_reply(tenant: dict, industry: dict | None, services: list
 
     key = os.environ.get("EMERGENT_LLM_KEY")
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        from llm_portable import LlmChat, UserMessage
         if not key:
             raise RuntimeError("EMERGENT_LLM_KEY missing")
 

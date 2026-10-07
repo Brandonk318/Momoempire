@@ -52,7 +52,7 @@ async def score_lead_from_transcript(transcript: str, caller_name: str = "", ind
     if not key or not transcript or len(transcript) < 20:
         return base
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        from llm_portable import LlmChat, UserMessage
         system = (
             "You are a sales intelligence engine. Given a short call transcript, classify the lead as "
             "'hot', 'warm', or 'cold'. Also give an integer score 0-100 and a one-sentence human reason. "
@@ -109,7 +109,7 @@ async def extract_crm_fields(transcript: str, industry: str = "") -> Dict[str, A
     if not key or not transcript or len(transcript) < 20:
         return base
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        from llm_portable import LlmChat, UserMessage
         system = (
             "You extract CRM fields from a service call transcript. "
             "Return ONLY valid JSON with keys: address, phone, email, service_requested, urgency "

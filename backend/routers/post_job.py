@@ -151,7 +151,7 @@ async def draft_review_response(data: ReviewResponseIn, user: dict = Depends(req
     if not key:
         return fallback
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        from llm_portable import LlmChat, UserMessage
         system = (
             "You draft public replies to customer reviews on Google/Yelp for a small service business. "
             "Rules: warm, specific, ~2 sentences, never defensive. For negative reviews: acknowledge, apologize "
@@ -286,7 +286,7 @@ async def draft_social_post(user: dict = Depends(require_tenant_user)):
     if not key:
         return fallback
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        from llm_portable import LlmChat, UserMessage
         system = (
             "You write short, warm social media captions for a local service business. "
             "~2-3 sentences, 1-2 emoji, add a soft CTA at the end. Return JSON only: "

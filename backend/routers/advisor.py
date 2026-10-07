@@ -99,7 +99,7 @@ async def advisor_chat(data: AdvisorMessageIn, user: dict = Depends(require_tena
     })
 
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        from llm_portable import LlmChat, UserMessage
         key = os.environ.get("EMERGENT_LLM_KEY")
         if not key:
             raise RuntimeError("EMERGENT_LLM_KEY missing")

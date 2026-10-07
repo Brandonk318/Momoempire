@@ -1,0 +1,15 @@
+name = "ai-office-pages"
+compatibility_date = "2025-12-01"
+pages_build_output_dir = "frontend/build"
+
+# No Workers runtime needed — this is a pure static Pages project.
+# API calls go to REACT_APP_BACKEND_URL (external backend host) via CORS.
+#
+# Set these in Cloudflare dashboard → Pages → Settings → Environment variables:
+#   Production:
+#     REACT_APP_BACKEND_URL = https://api.your-domain.com
+#   Preview:
+#     REACT_APP_BACKEND_URL = https://api-staging.your-domain.com
+#
+# Build command:  cd frontend && yarn install --frozen-lockfile && yarn build
+# Build output:   frontend/build

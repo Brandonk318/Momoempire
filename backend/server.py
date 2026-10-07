@@ -50,6 +50,7 @@ from routers.widget import router as widget_router
 from routers.post_job import router as post_job_router
 from routers.phase9 import router as phase9_router
 from routers.marketing import router as marketing_router
+from routers.health_deploy import router as health_deploy_router
 from routers.repeat import router as repeat_router
 from routers.testimonials import router as testimonials_router, public_router as testimonials_public_router
 
@@ -127,20 +128,26 @@ api.include_router(marketing_router)
 api.include_router(repeat_router)
 api.include_router(testimonials_router)
 api.include_router(testimonials_public_router)
+api.include_router(health_deploy_router)
 # Stripe is registered to deliver webhooks to /api/stripe/webhook (top-level).
 api.add_api_route("/stripe/webhook", _stripe_wh, methods=["POST"], include_in_schema=False)
 
 app.include_router(api)
 
 
-# Permissive CORS so preview + custom domains work; cookies use SameSite=None.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=".*",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS: env-driven allow-list when CORS_ORIGINS is set; otherwise permissive (dev + Emergent preview).
+# For Cloudflare Pages / Oracle / Fly, set CORS_ORIGINS="https://your-pages.pages.dev,https://your-domain.com"
+_cors_env = os.environ.get("CORS_ORIGINS", "").strip()
+_cors_kwargs: dict = {
+    "allow_credentials": True,
+    "allow_methods": ["*"],
+    "allow_headers": ["*"],
+}
+if _cors_env and _cors_env != "*":
+    _cors_kwargs["allow_origins"] = [o.strip() for o in _cors_env.split(",") if o.strip()]
+else:
+    _cors_kwargs["allow_origin_regex"] = ".*"
+app.add_middleware(CORSMiddleware, **_cors_kwargs)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("aio")

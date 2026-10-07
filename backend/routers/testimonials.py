@@ -66,7 +66,7 @@ async def polish_testimonial(text: str, name: str, biz: str, lang: str = "en") -
     if not key:
         return _fallback()
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        from llm_portable import LlmChat, UserMessage
         if lang.startswith("es"):
             system = (
                 "Eres un editor de marketing. Convierte una reseña bruta de un cliente en un "

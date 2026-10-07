@@ -141,7 +141,7 @@ async def quote_estimate(data: QuoteIn, user: dict = Depends(require_tenant_user
     if not key:
         return fallback
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        from llm_portable import LlmChat, UserMessage
         system = (
             "You are a quote estimator for a service business. Given the business's services + knowledge, "
             "produce a conservative BALLPARK range. Return ONLY JSON: "
@@ -199,7 +199,7 @@ async def coach_suggestions(data: CoachIn, user: dict = Depends(require_tenant_u
             ]
         return {"suggestions": hits[:5], "method": "rules"}
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        from llm_portable import LlmChat, UserMessage
         system = (
             "You are a sales coach whispering lines to a human agent in real time. Return ONLY JSON: "
             '{"suggestions":["...","...","..."]} with 3-5 short sentences the agent can read verbatim. '
