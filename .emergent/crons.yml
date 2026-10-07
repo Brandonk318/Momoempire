@@ -54,3 +54,9 @@ crons:
     endpoint: "{{BASE_URL}}/api/cron/repeat-reminders"
     method: POST
     enabled: true
+  - name: overdue-reminders
+    description: "Daily scan of unpaid invoices past due_at; emails reminder if not paused and under max_reminders"
+    cron: "15 14 * * *"
+    endpoint: "{{BASE_URL}}/api/cron/overdue-reminders"
+    method: POST
+    enabled: true

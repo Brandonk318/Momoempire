@@ -1,6 +1,44 @@
-# HANDOFF — Cloudflare-ready prep (branch: `cloudflare-ready`)
+## Branch structure (your three-branch plan)
 
-_Status: Round 1 of 3 (per work order §1). Rounds 2 (call-to-payment) and 3 (Spanish finish + voice demo) are **not** in this commit._
+| Branch | Scope | Status |
+|---|---|---|
+| `main` | Protected baseline | **Untouched by me.** |
+| `empire-market-expansion` | Prior work before Cloudflare prep | **Preserved.** This branch is NOT the base of the new branches below — treat it as a predecessor. |
+| `cloudflare-ready` | Round 1 — portable backend, Pages scaffolding, health probe, Docker, LLM shim | Code complete, tested in-preview, not yet live-deployed. |
+| `call-to-payment` (NEW) | Round 2 — quotes/jobs/invoices/payments collections, Stripe Connect Standard (direct charges), idempotent webhooks, overdue cron, portal | In progress — this current commit. |
+| `spanish-voice-finish` | Round 3 — Deep translate remaining dashboards, live voice homepage demo | Not started. |
+
+### Dependency order & how to combine
+```
+main
+  └── empire-market-expansion               (preserved historical work)
+          └── cloudflare-ready              (Round 1)
+                  └── call-to-payment       (Round 2) ← this commit
+                          └── spanish-voice-finish  (Round 3)
+```
+
+**Each branch builds on the one above it.** To ship them independently:
+- `cloudflare-ready` can merge to `main` on its own; it is additive and backward-compatible.
+- `call-to-payment` **depends on** `cloudflare-ready` for the `llm_portable` shim and `/api/health/deployment` endpoint. Merge order: `cloudflare-ready → main`, then `call-to-payment → main`.
+- `spanish-voice-finish` depends on `call-to-payment` only for the testimonial/quote email strings it will localize; otherwise independent.
+
+### Combine via rebase (recommended)
+```bash
+git checkout call-to-payment
+git rebase cloudflare-ready
+# resolve any trivial conflicts (likely only in HANDOFF.md and server.py router list)
+# then open the PR against main (or against cloudflare-ready if you want nested PRs).
+```
+
+### Combine via merge (if you prefer linear history + merge commits)
+```bash
+git checkout main
+git merge --no-ff cloudflare-ready
+git merge --no-ff call-to-payment
+git merge --no-ff spanish-voice-finish
+```
+
+I cannot `git` from this environment. Create and switch branches via the Emergent **"Save to GitHub"** button; it accepts a branch name per push.
 
 ## What actually changed in this branch
 
@@ -112,52 +150,53 @@ rm backend/llm_portable.py backend/routers/health_deploy.py \
 
 The MongoDB cluster is untouched by this round — no schema changes, no migrations, no data moves.
 
-## Monthly cost — hosting + DB + storage ONLY (≤ $15/mo target, no trial credits counted)
+## Monthly cost — hosting + DB + storage ONLY (≤ $15/mo target, no trial credits counted, no automatic paid upgrades)
 
-**Recommended stack: $0/mo hosting.** All items below are permanent free-forever tiers, NOT trial credits.
+**All items below are permanent free-forever tiers, NOT trial credits.** Figures remain **conditional** until (a) Oracle Always Free capacity is confirmed in your region, (b) a real deployment runs for ≥ 48 h, and (c) one full backup+restore cycle has been validated.
 
-| Line | Service | Permanent allowance | $/mo | Overage risk |
+| Line | Service | Permanent allowance | $/mo (conditional) | Overage risk |
 |---|---|---|---|---|
-| Frontend | **Cloudflare Pages — Free** | 500 builds/mo, unlimited bandwidth, 100 custom domains, 1 build at a time, 20k files/project | **$0** | None (Pages has no bandwidth overage); build cap resets monthly |
-| Backend | **Oracle Cloud — Always Free (ARM Ampere A1)** | 4 OCPU + 24 GB RAM across up to 4 VMs, 200 GB block storage, 10 TB egress/mo — [docs](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm) | **$0** | Oracle may reclaim an idle Ampere instance if region is capacity-constrained — mitigate by (a) sending traffic to keep it warm, (b) running a `supervisor` watchdog, (c) keeping a snapshot. Not a trial. |
-| Database | **MongoDB Atlas M0 — Free Forever** | 512 MB storage, shared vCPU, shared RAM, 100 max connections, 100 ops/sec sustained | **$0** | Hard 512 MB cap. If you breach it the cluster goes **read-only** until you upgrade (next tier M2 is $9/mo, M10 is ~$57/mo — explicitly off-budget). |
-| File storage | **Cloudflare R2 — Free class** | 10 GB storage, 1 M Class A ops/mo (writes), 10 M Class B ops/mo (reads), **zero egress fees** | **$0** | Past 10 GB: $0.015/GB·mo. Past op caps: $4.50 / M writes, $0.36 / M reads. |
-| **Hosting total** | — | — | **$0** | **~$5 only if you fail over** (see fallbacks below) |
+| Frontend | **Cloudflare Pages — Free** | 500 builds/mo, unlimited bandwidth, 100 custom domains, 1 concurrent build, 20k files/project | **$0** | Build cap resets monthly; no bandwidth overage |
+| Backend | **Oracle Cloud — Always Free (ARM Ampere A1)** | **2 OCPU + 12 GB RAM** across up to 4 micro-instances combined, 200 GB block storage, 10 TB egress/mo — [docs](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm) | **$0 if provisionable in your region** | Oracle may reclaim idle Ampere capacity; region availability varies and is often waitlisted. Not a trial, but **not guaranteed**. |
+| Database | **MongoDB Atlas M0 — Free Forever** | 512 MB storage, shared vCPU/RAM, 100 max connections, ~100 ops/sec sustained | **$0** | Hard 512 MB cap. **Cluster goes read-only** when exceeded. There is **no cheap one-step upgrade available in every region**; next publicly-listed paid tier starts at M10 ≈ $57/mo (explicitly off-budget). **Monitor and shed data before cap.** |
+| File storage | **Cloudflare R2 — Free class** | 10 GB storage, 1 M Class A ops/mo (writes/lists), 10 M Class B ops/mo (reads), **zero egress fees** | **$0** | Past 10 GB: $0.015/GB·mo. Past caps: $4.50 / 1 M Class A ops, $0.36 / 1 M Class B ops. A chatty gallery or thumbnail job can burn ops faster than storage. |
+| **Hosting total (if Oracle Always Free works)** | — | — | **$0** | — |
+| **Hosting total (if Oracle unavailable)** | — | — | **See fallbacks below** | — |
 
-### Fallback if Oracle Always Free isn't available (region waitlist, policy, etc.)
+### Fallback if Oracle Always Free isn't available (region waitlist, policy, capacity)
 
 | Replacement | $/mo | Note |
 |---|---|---|
 | **Hetzner CX22** (2 vCPU, 4 GB RAM, 40 GB SSD, EU/US) | **€3.79 ≈ $4.15** | Honest pay-as-you-go, no trial, no sleep. Still inside $15 cap. |
 | Fly.io `shared-cpu-1x @ 256 MB`, 1 machine, auto-stop | **~$2** at 50% uptime | Hobby plan, pay-as-you-go. Sleeps when idle, cold-start ~1s. |
-| Railway Hobby | **$5** | Includes $5 of usage; past that, pay-per-second. Hard to predict → **not recommended** for a budget cap. |
-| Render Starter | **$7** | Reliable but closer to the ceiling → fallback only. |
-
-**Worst-case hosting with fallback = $4–7/mo. Still ≤ $15.**
+| Railway Hobby | **$5** incl. $5 credit, then usage | Hard to predict; **not recommended** for a strict cap. |
+| Render Starter | **$7** | Reliable but close to the ceiling → fallback only. |
 
 ### Items I explicitly ruled out
-- **Render Starter at $7** + Atlas M10 at $57 → off-budget, excluded.
-- **Fly Launch plan with managed Postgres** → off-budget.
-- **Vercel/Netlify Pro** → off-budget.
-- **MongoDB Atlas M2 at $9/mo** → kept as the one-step overage path only, not the baseline.
-- **Any 30-day free trial credit** (Google Cloud, AWS, Azure, DigitalOcean $200) → NOT counted; those run out.
+- **Atlas M2 / M5 as a cheap next step** → not reliably available at the previously-quoted $9. Removed from recommendation. If the M0 fills up, migrate to self-hosted MongoDB on the backend VM (free, requires ops effort) or export to Postgres.
+- **Render Starter at $7 as baseline** → fallback-only.
+- **Vercel/Netlify Pro, Fly Launch plan, Atlas M10** → off-budget.
+- **Any 30-day free trial credit** (GCP, AWS, Azure, DO $200) → NOT counted.
 
-### Variable fees — separate from hosting, usage-driven
+### Variable fees — SEPARATE from hosting, usage-driven (not part of the $15 cap)
 
-| Line | Who collects | Floor | Note |
+| Line | Collector | Floor | Note |
 |---|---|---|---|
-| LLM (OpenAI gpt-4o-mini) | OpenAI | **$0** (pay-per-token) | ~$0.15 / 1 M input tokens, $0.60 / 1 M output. 100 demo conversations ≈ ~$0.10. |
+| LLM (OpenAI gpt-4o-mini) | OpenAI | **$0** (pay-per-token) | $0.15/1 M input, $0.60/1 M output. 100 demo chats ≈ ~$0.10. |
 | LLM (if staying on Emergent) | Emergent Universal Key | $0 base, pre-paid balance | Same models, Emergent-brokered pricing. |
-| Voice & SMS | Twilio | $1/mo per phone number + per-minute/per-SMS | US local voice $0.0085/min inbound, SMS $0.0083 each. |
-| Email | Resend | $0 for 3k emails/mo; $20/mo for 50k | Or free via Emergent-managed Resend already provisioned. |
-| Payment processing | Stripe | 2.9% + $0.30 per card charge | Direct charges with Connect Standard — tenants pay this on their revenue, not you. |
+| Voice & SMS | Twilio | $1/mo per phone number + per-use | US local voice $0.0085/min in, SMS $0.0083 each. |
+| Email | Resend | $0 for 3 k/mo; $20/mo for 50 k | Or free via the Emergent-managed Resend already provisioned. |
+| Payment processing | Stripe | 2.9 % + $0.30 per card charge | **Direct charges via Connect Standard** — tenants pay this on their revenue, not you. |
 
-**These are revenue-coupled, not fixed overhead. Hosting + DB + storage stays at $0–5/mo at low usage.**
+### Known blockers / caveats (not resolved)
 
-### Blockers / what to watch
-- **Atlas M0 → read-only at 512 MB.** When `health_deploy.counts.*` grows into the hundreds of thousands, migrate to M2 ($9) or an Oracle self-hosted Mongo (free, requires ops effort). Add a monthly alert.
-- **Oracle Ampere reclamation.** Keep weekly backups of `MONGO_URL` data via `mongodump` to R2 (fits in the free 10 GB).
-- **Twilio toll fraud.** Enable Twilio's "Voice Geographic Permissions" to only allow dial-out to your countries — one accidental international loop can cost more than a year of hosting.
+- **Oracle Ampere availability is unverified.** If signup refuses or the region is capacity-constrained, hosting cost shifts to the fallback row (≈ $4–7/mo). I have **not** provisioned anything.
+- **Atlas M0 is a hard ceiling, not a soft one.** No cheap step up — plan a self-hosted migration path before you breach 512 MB.
+- **R2 free-tier op caps can bite before storage.** 10 M Class B reads/mo = ~3 reads/sec sustained; add CDN caching for public images.
+- **Twilio toll-fraud risk.** Enable Twilio "Voice Geographic Permissions" to lock dial-out to your countries.
+- **Platform subscription vs. tenant-payment separation.** Platform Stripe account is **you**; tenant payments route to each tenant's own Standard-connected account with `stripe-account` header → no funds commingling.
+
+**No paid resources will be provisioned by this codebase.** All upgrade paths are manual decisions in the respective dashboards.
 
 ## Not in this round (deferred by your explicit priority)
 

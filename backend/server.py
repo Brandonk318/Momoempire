@@ -51,6 +51,11 @@ from routers.post_job import router as post_job_router
 from routers.phase9 import router as phase9_router
 from routers.marketing import router as marketing_router
 from routers.health_deploy import router as health_deploy_router
+from routers.call_to_payment import (
+    router as c2p_router,
+    public_router as c2p_public_router,
+    connect_webhook as _c2p_connect_wh,
+)
 from routers.repeat import router as repeat_router
 from routers.testimonials import router as testimonials_router, public_router as testimonials_public_router
 
@@ -129,8 +134,12 @@ api.include_router(repeat_router)
 api.include_router(testimonials_router)
 api.include_router(testimonials_public_router)
 api.include_router(health_deploy_router)
-# Stripe is registered to deliver webhooks to /api/stripe/webhook (top-level).
+api.include_router(c2p_router)
+api.include_router(c2p_public_router)
+# Stripe is registered to deliver webhooks to /api/stripe/webhook (top-level, platform account).
 api.add_api_route("/stripe/webhook", _stripe_wh, methods=["POST"], include_in_schema=False)
+# Stripe Connect webhook (connected accounts) → /api/stripe/connect-webhook. Separate signing secret.
+api.add_api_route("/stripe/connect-webhook", _c2p_connect_wh, methods=["POST"], include_in_schema=False)
 
 app.include_router(api)
 
@@ -158,6 +167,17 @@ async def startup():
     try:
         await run_all_seeds()
         await seed_plans()
+        # Idempotency index for the Connect webhook — duplicate event.id → safe skip.
+        from db import get_db
+        _db = get_db()
+        try:
+            await _db.webhook_events.create_index("_id", unique=True)
+        except Exception:
+            pass
+        try:
+            await _db.invoice_payments.create_index("stripe_payment_intent_id", unique=True)
+        except Exception:
+            pass
         log.info("Seed complete")
     except Exception as e:
         log.exception("Seed failed: %s", e)
