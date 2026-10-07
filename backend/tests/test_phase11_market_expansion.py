@@ -78,12 +78,42 @@ class TestTenantMarketSwitching:
         assert r.json()["country"] == code
 
     def test_unknown_or_disabled_market_is_rejected(self, owner_client):
+        before = owner_client.get(f"{API}/tenants/me", timeout=15)
+        assert before.status_code == 200, before.text
+        before_tenant = before.json()
+        before_country = before_tenant.get("country")
+        before_address_country = (before_tenant.get("address") or {}).get("country")
+
         r = owner_client.put(
             f"{API}/tenants/me/country",
             json={"country": "ZZ"},
             timeout=15,
         )
         assert r.status_code == 400
+
+        after = owner_client.get(f"{API}/tenants/me", timeout=15)
+        assert after.status_code == 200, after.text
+        after_tenant = after.json()
+        assert after_tenant.get("country") == before_country
+        assert (after_tenant.get("address") or {}).get("country") == before_address_country
+
+    def test_normalized_country_persists_to_both_country_fields(self, owner_client):
+        countries = requests.get(f"{API}/countries?enabled_only=true", timeout=15).json()
+        if not countries:
+            pytest.skip("No enabled countries configured")
+        code = countries[0]["code"].upper()
+
+        r = owner_client.put(
+            f"{API}/tenants/me/country",
+            json={"country": f"  {code.lower()}  "},
+            timeout=15,
+        )
+        assert r.status_code == 200, r.text
+
+        me = owner_client.get(f"{API}/tenants/me", timeout=15)
+        assert me.status_code == 200, me.text
+        assert me.json().get("country") == code
+        assert (me.json().get("address") or {}).get("country") == code
 
     def test_unauthenticated_market_switch_is_rejected(self):
         r = requests.put(
