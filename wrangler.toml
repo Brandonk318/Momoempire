@@ -1,0 +1,6 @@
+# Cloudflare Pages project configuration; frontend is a static React build.
+# Cloudflare Pages must be configured with the build command:
+#   cd frontend && yarn install --frozen-lockfile && yarn build
+# Build output directory: frontend/build
+name = "empire-ai-office"
+pages_build_output_dir = "./frontend/build"
