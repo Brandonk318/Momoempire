@@ -18,13 +18,10 @@ WORKDIR /app
 
 # Install python deps first for layer caching.
 COPY requirements.txt /app/requirements.txt
+# Install only public Python packages for a portable off-Emergent build.
+# Private Emergent integrations are not required by llm_portable's OpenAI path.
 RUN pip install --upgrade pip \
-    && pip install -r /app/requirements.txt \
-    # emergentintegrations is OPTIONAL — only install if the index is reachable.
-    # Set BUILD_EMERGENT=0 to skip and use native OPENAI_API_KEY instead.
-    && if [ "${BUILD_EMERGENT:-1}" = "1" ]; then \
-         pip install emergentintegrations --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ || echo "emergentintegrations unavailable — using native OPENAI_API_KEY fallback"; \
-       fi
+    && pip install -r /app/requirements.txt
 
 # App code.
 COPY . /app
