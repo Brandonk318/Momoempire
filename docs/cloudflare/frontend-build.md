@@ -1,0 +1,1 @@
+Cloudflare Pages serves frontend/build. Build verification remains pending.
