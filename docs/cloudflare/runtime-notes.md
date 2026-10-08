@@ -1,0 +1,1 @@
+Cloudflare Pages hosts the React frontend. The FastAPI backend requires a separate Python server.
