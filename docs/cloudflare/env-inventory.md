@@ -1,0 +1,1 @@
+Required configuration names are listed in backend/.env.example. Values belong in hosting dashboards, not Git.
