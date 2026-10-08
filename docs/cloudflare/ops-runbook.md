@@ -25,3 +25,9 @@ Date: 2026-10-08. Planning only; no DNS, hosting, or billing changes.
 
 ## Open dependencies
 Production host and domain selection, credentials, database backup destination, real health checks, and alert destination are not yet verified. No live failover or restore test performed.
+
+## Follow-up verification (2026-10-08)
+- Run the Cloudflare frontend build on an isolated staging runner.
+- Confirm backend readiness on a staging host.
+- Capture successful rollback and database restore evidence before release.
+- Require an explicit go/no-go decision before changing production settings.
