@@ -1,2 +1,2 @@
-/* All non-asset paths fall back to index.html for SPA routing. */
-/*    /index.html   200
+# Single-page application fallback for client-side routes
+/* /index.html 200
