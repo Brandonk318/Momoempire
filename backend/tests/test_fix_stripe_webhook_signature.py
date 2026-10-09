@@ -231,3 +231,59 @@ def test_no_placeholder_literal_fallback_in_source():
     for rel in ("routers/payments.py", "routers/overage.py", "routers/call_to_payment.py"):
         src = (root / rel).read_text()
         assert 'or "sk_test_emergent"' not in src, rel
+
+
+# ---------- Unsigned connected-account webhooks with no signing config (9cf5228) ----------
+
+def test_connect_unsigned_and_unconfigured_rejected_nothing_stored(connect_client, monkeypatch):
+    """No secret configured AND no signature: rejected (503) before any DB write."""
+    monkeypatch.delenv("STRIPE_CONNECT_WEBHOOK_SECRET", raising=False)
+    monkeypatch.delenv("STRIPE_WEBHOOK_SECRET", raising=False)
+    paid = {"paid": False}
+    db = _invoice_db(paid)
+    with patch.object(call_to_payment, "get_db", return_value=db):
+        r = connect_client.post("/api/stripe/connect-webhook", content=_pi_event("evt_unsigned"))
+    assert r.status_code == 503
+    assert paid["paid"] is False
+    db.webhook_events.insert_one.assert_not_called()
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\t"])
+def test_connect_blank_secret_counts_as_missing(connect_client, monkeypatch, blank):
+    monkeypatch.setenv("STRIPE_CONNECT_WEBHOOK_SECRET", blank)
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", blank)
+    paid = {"paid": False}
+    db = _invoice_db(paid)
+    with patch.object(call_to_payment, "get_db", return_value=db):
+        r = connect_client.post("/api/stripe/connect-webhook", content=_pi_event("evt_blank"),
+                                headers={"stripe-signature": "t=1,v1=deadbeef"})
+    assert r.status_code == 503
+    assert paid["paid"] is False
+    db.webhook_events.insert_one.assert_not_called()
+
+
+@pytest.mark.parametrize("sig", ["", "   "])
+def test_connect_missing_signature_rejected_when_configured(connect_client, monkeypatch, sig):
+    monkeypatch.setenv("STRIPE_CONNECT_WEBHOOK_SECRET", TEST_SECRET)
+    paid = {"paid": False}
+    db = _invoice_db(paid)
+    with patch.object(call_to_payment, "get_db", return_value=db):
+        r = connect_client.post("/api/stripe/connect-webhook", content=_pi_event("evt_nosig"),
+                                headers={"stripe-signature": sig})
+    assert r.status_code == 400
+    assert "signature" in r.text.lower()
+    assert paid["paid"] is False
+    db.webhook_events.insert_one.assert_not_called()
+
+
+def test_connect_falls_back_to_platform_secret(connect_client, monkeypatch):
+    """STRIPE_WEBHOOK_SECRET is used when STRIPE_CONNECT_WEBHOOK_SECRET is unset (both sides kept this)."""
+    monkeypatch.delenv("STRIPE_CONNECT_WEBHOOK_SECRET", raising=False)
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", TEST_SECRET)
+    paid = {"paid": False}
+    payload = _pi_event("evt_fallback")
+    with patch.object(call_to_payment, "get_db", return_value=_invoice_db(paid)):
+        r = connect_client.post("/api/stripe/connect-webhook", content=payload,
+                                headers={"stripe-signature": _sign(payload)})
+    assert r.status_code == 200, r.text
+    assert paid["paid"] is True
