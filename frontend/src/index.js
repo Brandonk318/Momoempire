@@ -5,27 +5,34 @@ import "@/index.css";
 import "@/i18n";
 
 // EMP-WL-002: REACT_APP_WAITLIST_ONLY=true at build time serves only /, /privacy and /terms.
-// The condition is a build-time constant, so webpack drops the unused branch: a waitlist build
-// does not include App.js (dashboard, admin, auth pages) at all.
-const App =
-  process.env.REACT_APP_WAITLIST_ONLY === "true"
-    ? require("@/waitlist/WaitlistApp").default
-    : require("@/App").default;
+// "@root-app" is a build-time alias (craco.config.js) to src/waitlist/WaitlistApp.jsx in that
+// build and to src/App.js otherwise, so the waitlist build does not include App.js (dashboard,
+// admin, auth pages) at all, and the normal build is bundled exactly as before.
+import App from "@root-app";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 60_000,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+// WL-033: the waitlist build doesn't use react-query, so skip it there (build-time constant;
+// webpack then drops @tanstack/react-query from that bundle).
+const WAITLIST_ONLY = process.env.REACT_APP_WAITLIST_ONLY === "true";
+const queryClient = WAITLIST_ONLY
+  ? null
+  : new QueryClient({
+      defaultOptions: {
+        queries: {
+          staleTime: 60_000,
+          refetchOnWindowFocus: false,
+        },
+      },
+    });
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
+    {WAITLIST_ONLY ? (
       <App />
-    </QueryClientProvider>
+    ) : (
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    )}
   </React.StrictMode>,
 );
