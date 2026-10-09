@@ -48,6 +48,34 @@ also reset on restart.
   about 3–4 ms; estimate). If the full app ever needs more workers, move the limiter to a shared
   store first (MongoDB TTL counter, Redis, or Cloudflare rate limiting rules).
 
+## Unique email index and the dedupe script (EMP-WL-024, WL-040)
+- At startup (and before the first signup in the waitlist-only app) the backend de-duplicates the
+  waitlist by normalized email, archiving later copies to `waitlist_duplicates`, then builds a
+  unique index on `email` (only for non-empty emails, so legacy rows without an email don't block it).
+- To see what it would do first, run the script by hand (dry run by default, `--apply` to write):
+  ```
+  cd backend && python scripts/dedupe_waitlist.py            # counts only
+  cd backend && python scripts/dedupe_waitlist.py --apply    # archive + normalize
+  ```
+  It uses `MONGO_URL` and `DB_NAME` from the environment, like the app.
+- If the index still can't be built (it retries twice), the log has a **CRITICAL** line,
+  `GET /api/health` returns `{"status": "degraded"}`, and with `APP_ENV=production` or `staging`
+  the full app **refuses to start**. Usual cause: an existing non-unique `email_1` index. It is
+  never dropped automatically; drop it yourself (`db.waitlist.dropIndex("email_1")` in mongosh)
+  after checking, then restart.
+- Database errors during signup return **503** with a generic "try again" message (never a fake
+  success) and are logged by error type only, with no email address (EMP-WL-041).
+
+## Turnstile: switch it on both sides together (EMP-WL-023)
+| Side | Variables | When |
+|---|---|---|
+| Backend (`backend/.env`) | `TURNSTILE_ENABLED=true`, `TURNSTILE_SECRET_KEY` | Restart. Enabled without a secret refuses to start. |
+| Frontend (Cloudflare Pages build env) | `REACT_APP_TURNSTILE_ENABLED=true`, `REACT_APP_TURNSTILE_SITE_KEY` | Rebuild. Enabled without a site key **fails the build**. |
+
+If only the backend is on, every signup is rejected (no token). If only the frontend is on, the
+widget shows but the token isn't checked. `REACT_APP_TURNSTILE_ENABLED=false` hides the widget even
+when a site key is set; leaving it unset keeps the old rule (widget shown when a site key is set).
+
 ## Production value: Cloudflare's IP ranges (in Nginx)
 Cloudflare publishes its edge ranges here (official): **https://www.cloudflare.com/ips/**. Plain-text lists:
 - https://www.cloudflare.com/ips-v4

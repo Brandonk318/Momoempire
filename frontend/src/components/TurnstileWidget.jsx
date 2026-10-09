@@ -1,9 +1,15 @@
 import { useEffect, useRef } from "react";
 
-// Cloudflare Turnstile widget. Renders nothing unless REACT_APP_TURNSTILE_SITE_KEY is set at build
-// time. The backend only checks the token when TURNSTILE_ENABLED is on (off by default).
-// Read at render time (CRA still inlines it at build time) so tests can set it.
-const siteKey = () => process.env.REACT_APP_TURNSTILE_SITE_KEY || "";
+// Cloudflare Turnstile widget. The backend only checks the token when TURNSTILE_ENABLED is on.
+// Frontend switch (EMP-WL-023): REACT_APP_TURNSTILE_ENABLED=true|false. Unset keeps the old rule
+// (on when REACT_APP_TURNSTILE_SITE_KEY is set). "true" without a site key fails the build
+// (frontend/turnstile-env.js). Read at render time (CRA still inlines it at build time) so tests
+// can set it.
+const siteKey = () => {
+  const enabled = (process.env.REACT_APP_TURNSTILE_ENABLED || "").trim().toLowerCase();
+  if (enabled === "false") return "";
+  return (process.env.REACT_APP_TURNSTILE_SITE_KEY || "").trim();
+};
 const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 
 function loadScript() {
