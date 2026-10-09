@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { api, errMessage } from "@/lib/api";
+import { waitlistErrorText } from "@/lib/waitlistErrors";
 import { toast } from "sonner";
 import DemoCall from "@/components/DemoCall";
 import { isWaitlistOnly } from "@/lib/waitlistMode";
@@ -87,7 +88,8 @@ export default function Landing() {
     } catch (err) {
       // EMP-WL-013: show the error next to the form (announced, linked to the email field)
       // instead of only in a toast.
-      setWlError(errMessage(err));
+      // EMP-WL-064 / WL-071: translated 503 text, plain wording for validation errors.
+      setWlError(waitlistErrorText(err, t, errMessage));
     }
     finally { setWlSending(false); }
   };
