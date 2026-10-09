@@ -59,6 +59,36 @@ class WaitlistPostGuard:
         await self.app(scope, receive, send)
 
 
+class DropOrphanCredentialsHeader:
+    """EMP-WL-052: drop `Access-Control-Allow-Credentials` from responses that carry no
+    `Access-Control-Allow-Origin`.
+
+    Starlette's CORSMiddleware adds `Access-Control-Allow-Credentials: true` to every response when
+    credentials are allowed, including 403/415s and preflights for DISALLOWED origins. Without
+    Allow-Origin the browser blocks the read anyway, so the header means nothing there; this just
+    stops advertising it. Allowed origins (which get Allow-Origin) are untouched. Must sit OUTSIDE
+    CORSMiddleware to see its headers; install_waitlist_guard() puts it outermost.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            return await self.app(scope, receive, send)
+
+        async def _send(message):
+            if message.get("type") == "http.response.start":
+                headers = list(message.get("headers") or [])
+                names = {k.lower() for k, _ in headers}
+                if b"access-control-allow-credentials" in names and b"access-control-allow-origin" not in names:
+                    message = dict(message)
+                    message["headers"] = [(k, v) for k, v in headers if k.lower() != b"access-control-allow-credentials"]
+            await send(message)
+
+        await self.app(scope, receive, _send)
+
+
 async def _reply(send, status: int, detail: str) -> None:
     body = json.dumps({"detail": detail}).encode()
     await send({"type": "http.response.start", "status": status,
@@ -73,9 +103,14 @@ def install_waitlist_guard(app) -> None:
     inserts at index 0, so a guard added after CORSMiddleware would sit OUTSIDE it and its 415/403
     replies would carry no CORS headers (the browser shows a network error instead of the reason).
     Appending puts it inside CORS whatever order the middlewares are registered in.
+
+    Also puts DropOrphanCredentialsHeader OUTERMOST (index 0), outside CORS (EMP-WL-052). Call this
+    after CORSMiddleware is registered (server.py and waitlist_mode.py both do).
     """
     if getattr(app, "middleware_stack", None) is not None:
         raise RuntimeError("install_waitlist_guard must run before the app starts")
+    if not any(m.cls is DropOrphanCredentialsHeader for m in app.user_middleware):
+        app.user_middleware.insert(0, Middleware(DropOrphanCredentialsHeader))
     if any(m.cls is WaitlistPostGuard for m in app.user_middleware):
         return
     app.user_middleware.append(Middleware(WaitlistPostGuard))

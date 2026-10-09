@@ -27,9 +27,10 @@ What you get:
 | Cloudflare Pages build env (Production) | `REACT_APP_WAITLIST_ONLY` | `true` | Builds the waitlist-only app. Read at **build** time, so changing it needs a rebuild. |
 | Cloudflare Pages build env (Production) | `REACT_APP_BACKEND_URL` | the backend's HTTPS origin, e.g. `https://api.example.com` | Where the form posts. Build time. |
 | Backend env (`backend/.env`) | `WAITLIST_ONLY` | `true` | Minimal API (health + waitlist only). |
-| Backend env | `CORS_ORIGINS` | the exact frontend origins, comma-separated, e.g. `https://<project>.pages.dev,https://www.example.com` | **Required**, including for a same-origin setup (see below). Every hostname needs its own entry (Pages URL, apex, www). No paths, https only. What happens without it is described under "CORS_ORIGINS" below. |
+| Backend env | `CORS_ORIGINS` | the exact frontend origins, comma-separated, e.g. `https://<project>.pages.dev,https://www.example.com` | **Required**, including for a same-origin setup (see below). Every hostname needs its own entry (Pages URL, apex, www). No paths, https only, **all lower case** (see "Use lower case" below). What happens without it is described under "CORS_ORIGINS" below. |
 | Backend env | `APP_ENV` | `production` | With PR #10: strict CORS (https only, explicit origins, fail closed). Without #10 it has no effect on CORS. |
 | Backend env | `FORWARDED_ALLOW_IPS` | the proxy's IP as uvicorn sees it (table below) | **Required** (needs #11). Without the right value, every visitor shares the proxy's rate-limit bucket. Never `*`. |
+| Backend env | `WAITLIST_CONFIRMATION_EMAIL` | leave **unset** (or `false`) | Needs #15. Unset means **off**: no confirmation email is sent, queued or logged. Only `1`/`true`/`yes`/`on` turns it on. Don't turn it on for launch: the email template still mentions a free trial and links aioffice.io pricing (EMP-WL-004/009, Brann decides). (EMP-WL-045) |
 | Backend env | `MONGO_URL`, `DB_NAME` | as for any deploy | Where waitlist signups are stored. `JWT_SECRET` isn't used by the two served routes, but keep the usual value. |
 
 Optional (needs #11): `TURNSTILE_ENABLED`, `TURNSTILE_SECRET_KEY` and the frontend's
@@ -46,6 +47,13 @@ The server **starts** in every case below; nothing here stops startup.
 
 So: always set `CORS_ORIGINS`. Without #10, a missing value is silent and unsafe; with #10 it is
 logged but the form stops working.
+
+**Use lower case (EMP-WL-052).** Write every entry in lower case, e.g. `https://www.example.com`,
+not `https://WWW.Example.com`. Browsers always send a lower-case `Origin`. Without PR #10, a
+mixed-case entry passes the waitlist guard (it compares case-insensitively) but Starlette's CORS
+compares exactly, so the browser blocks the form. PR #10 lower-cases entries for you; lower case
+works either way. Responses to a disallowed origin carry no `Access-Control-Allow-Origin` and,
+since the waitlist follow-ups PR, no `Access-Control-Allow-Credentials` either.
 
 **Same-origin setups still need it.** If the frontend and the API share one origin (for example
 Nginx serves the static build and proxies `/api` on `https://www.example.com`), the browser still
@@ -69,6 +77,10 @@ the Nginx block: `client-ip-and-proxies.md` (from #11).
    startup log for `WAITLIST_ONLY is on: serving only /api/health and POST /api/public/waitlist`.
 2. **Backend checks** (replace the host):
    - `curl -i https://API/api/health` gives 200 `{"status":"ok"}`. `curl -I` (HEAD) gives 200.
+     `{"status":"degraded"}` means the database ping failed or (with #18) the unique email index
+     couldn't be built: see `client-ip-and-proxies.md`, "Unique email index and the dedupe script".
+     With #18 the waitlist app builds that index at startup and, with `APP_ENV=production`, refuses
+     to start if it can't.
    - `curl -i https://API/docs` and `curl -i https://API/api/auth/me` give 404.
    - `curl -i -X POST https://API/api/public/waitlist -H 'Content-Type: text/plain' -d '{}'` gives 415.
    - `curl -i -X OPTIONS https://API/api/public/waitlist -H 'Origin: https://evil.example' -H 'Access-Control-Request-Method: POST'`
@@ -96,6 +108,8 @@ the Nginx block: `client-ip-and-proxies.md` (from #11).
 - **Landing copy and CTA** (EMP-WL-001): `TODO(WL-001, Brann)` slots mark where waitlist-mode copy
   goes.
 - **Contact addresses and brand** (EMP-WL-004/005), **mobile overflow** (EMP-WL-006),
-  **confirmation email** (EMP-WL-008/009), **consent** (EMP-WL-010) and **claims** (EMP-WL-011).
+  **consent** (EMP-WL-010) and **claims** (EMP-WL-011).
+- **Confirmation email:** off by default with #15 (`WAITLIST_CONFIRMATION_EMAIL`, see Settings).
+  Whether to send one, and its wording, is EMP-WL-009 (Brann decides).
 - **Cost (estimate):** $0 on Cloudflare Pages' free plan (developers.cloudflare.com/pages/platform/limits).
   The backend host and domain aren't priced here; Brann decides.
