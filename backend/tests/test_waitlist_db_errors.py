@@ -288,6 +288,17 @@ def test_legacy_suites_default_to_a_dead_local_url():
         assert "/app/frontend/.env" not in src, name
 
 
+def test_no_test_reads_deployment_env_files_or_holds_a_personal_address():
+    """WL-044 leftovers (final QC): no suite reads /app/backend/.env (it holds the deployment's
+    secrets and DB URL) and no personal Gmail address sits in the repo."""
+    for f in sorted((BACKEND / "tests").glob("*.py")):
+        if f.name == Path(__file__).name:
+            continue
+        src = f.read_text()
+        assert "/app/" not in src, f.name
+        assert not re.search(r"[\w.+-]+@gmail\.com", src), f.name
+
+
 LEGACY_LIVE_SUITES = ("backend_test.py", "test_phase2.py", "test_phase4.py", "test_phase6.py",
                       "test_phase10_new_features.py", "test_iteration10_cloudflare_prep.py",
                       "test_phase5.py", "test_phase7.py", "test_phase8.py", "test_phase9.py",
@@ -384,3 +395,52 @@ def test_real_mongo_unreachable_db_gives_503(monkeypatch):
             return await c.post(WL, json={"email": EMAIL})
     r = asyncio.run(run())
     assert r.status_code == 503 and r.json() == {"detail": mk.WAITLIST_UNAVAILABLE}
+
+
+# ---------------- EMP-WL-062: no "already on the list" oracle when inserts fail ----------------
+@pytest.mark.skipif(not MONGO_URL, reason="set WAITLIST_TEST_MONGO_URL to a throwaway MongoDB")
+def test_real_mongo_validator_blocking_writes_gives_same_answer_for_known_and_new(monkeypatch):
+    """Watcher's WL-062: a validator that blocks inserts used to answer 200 for an existing email
+    (no-op match) and 503 for a new one. Both must now get the same 503."""
+    from motor.motor_asyncio import AsyncIOMotorClient
+    import httpx
+    monkeypatch.delenv("TURNSTILE_ENABLED", raising=False)
+    for lim in (mk._WAITLIST_IP_MINUTE, mk._WAITLIST_IP_HOUR):
+        lim.reset()
+    name = f"wl062_{uuid.uuid4().hex[:8]}"
+
+    async def run():
+        client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=3000)
+        db = client[name]
+        try:
+            monkeypatch.setattr(mk, "get_db", lambda: db)
+            monkeypatch.setattr(mk, "_WAITLIST_INDEX_READY", False)
+            monkeypatch.setattr(mk, "_WAITLIST_INDEX_OK", None)
+            app = FastAPI()
+            app.include_router(mk.router, prefix="/api")
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+                ok = await c.post(WL, json={"email": EMAIL})
+                assert ok.status_code == 200, ok.text
+                again = await c.post(WL, json={"email": EMAIL})  # healthy repeat: same reply
+                assert again.status_code == 200 and again.json() == ok.json()
+                # Break the DB: every write must now carry a field no row has.
+                await db.command({"collMod": "waitlist", "validationLevel": "strict",
+                                  "validator": {"$jsonSchema": {"required": ["wl062_required"]}}})
+                known = await c.post(WL, json={"email": EMAIL})
+                new = await c.post(WL, json={"email": "brand.new@example.com"})
+                rows = await db.waitlist.count_documents({})
+            return known, new, rows
+        finally:
+            await client.drop_database(name)
+            client.close()
+    known, new, rows = asyncio.run(run())
+    assert (known.status_code, known.json()) == (new.status_code, new.json()) == (503, {"detail": mk.WAITLIST_UNAVAILABLE})
+    assert rows == 1
+
+
+def test_repeat_signup_never_overwrites_stored_fields(env):
+    c, db, _ = env
+    assert c.post(WL, json={"email": EMAIL, "name": "First"}).status_code == 200
+    assert c.post(WL, json={"email": EMAIL, "name": "Attacker"}).status_code == 200
+    (row,) = db.waitlist.docs
+    assert row["name"] == "First"

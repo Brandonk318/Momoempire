@@ -87,14 +87,17 @@ class FakeWaitlist:
     async def update_one(self, q, upd, upsert=False):
         for d in self.docs:
             if _match(d, q):
-                if "$set" in upd:
-                    d.update(upd["$set"])
+                if "$set" in upd or "$inc" in upd:
+                    d.update(upd.get("$set") or {})
+                    for k, n in (upd.get("$inc") or {}).items():  # EMP-WL-062
+                        d[k] = d.get(k, 0) + n
                     return _Res(modified=1)
                 return _Res()
         if upsert:
             nd = {k: v for k, v in q.items() if not isinstance(v, dict)}
             nd.update(copy.deepcopy(upd.get("$setOnInsert") or {}))
             nd.update(upd.get("$set") or {})
+            nd.update(upd.get("$inc") or {})
             self.docs.append(nd)
             return _Res(upserted_id=nd.get("id", "x"))
         return _Res()

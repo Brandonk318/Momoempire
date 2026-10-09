@@ -30,12 +30,8 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://127.0.0.1:9").rstrip(
 
 # Read secrets directly from backend/.env
 BACKEND_ENV = {}
-with open("/app/backend/.env") as f:
-    for line in f:
-        line = line.strip()
-        if "=" in line and not line.startswith("#"):
-            k, v = line.split("=", 1)
-            BACKEND_ENV[k.strip()] = v.strip().strip('"').strip("'")
+# WL-044: from the environment only, never the deployment's backend/.env (secrets, DB URL).
+BACKEND_ENV.update(os.environ)
 STRIPE_WEBHOOK_SECRET = BACKEND_ENV.get("STRIPE_WEBHOOK_SECRET", "")
 WEBHOOK_CRON_SECRET = BACKEND_ENV.get("WEBHOOK_CRON_SECRET", "")
 MONGO_URL = BACKEND_ENV.get("MONGO_URL", "mongodb://localhost:27017")

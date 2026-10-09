@@ -590,7 +590,14 @@ async def waitlist(request: Request, background: BackgroundTasks):
     }
     inserted = False
     try:
-        res = await db.waitlist.update_one({"email": email}, {"$setOnInsert": doc}, upsert=True)
+        # EMP-WL-062: "$inc" makes a repeat signup a real write too. With only "$setOnInsert", an
+        # existing email was a no-op match, so a DB state that blocks inserts but not matches
+        # (e.g. a schema validator) answered 200 for a known email and 503 for a new one, which
+        # told an attacker the address was on the list. Now both paths write and fail alike.
+        # signup_count is internal (never exported, never shown); nothing the visitor sent is
+        # overwritten (CF-029/031).
+        res = await db.waitlist.update_one(
+            {"email": email}, {"$setOnInsert": doc, "$inc": {"signup_count": 1}}, upsert=True)
         inserted = getattr(res, "upserted_id", None) is not None
     except DuplicateKeyError:  # concurrent signup won the race on the unique index = already on the list
         log.info("waitlist: concurrent duplicate signup ignored")
