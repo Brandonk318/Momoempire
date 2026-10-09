@@ -420,3 +420,21 @@ def test_deploy_doc_fixes():
     assert "**confirmation email** (EMP-WL-008/009)" not in doc
     ex = (BACKEND / ".env.example").read_text()
     assert "enforces this at startup" not in ex and "still starts but fails closed" in ex
+
+
+def test_deploy_doc_final_qc_fixes():
+    """EMP-WL-092 (Watcher final QC, items a-f)."""
+    doc = (BACKEND.parent / "docs" / "deploy" / "waitlist-only.md").read_text()
+    # (a) both Turnstile switches, switched together
+    assert "REACT_APP_TURNSTILE_ENABLED" in doc and "**switched together**" in doc
+    # (b) source maps
+    assert "`GENERATE_SOURCEMAP` | `false`" in doc and "sourceMappingURL" in doc
+    # (c) site metadata settings + link
+    for name in ("REACT_APP_SITE_NAME", "REACT_APP_SITE_DESCRIPTION", "REACT_APP_SITE_URL", "REACT_APP_OG_IMAGE_URL"):
+        assert name in doc, name
+    assert "site-metadata.md" in doc
+    # (d) DB down at boot starts degraded; (e) non-unique email_1 step without a URI password
+    assert "**down at boot**" in doc
+    assert 'db.waitlist.dropIndex("email_1")' in doc and "password prompt" in doc
+    # (f) stale known gaps
+    assert "**mobile overflow** (EMP-WL-006)" not in doc and "not fixed by this PR" not in doc
