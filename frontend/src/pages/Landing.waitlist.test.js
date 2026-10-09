@@ -116,3 +116,33 @@ test("submitting sends the honeypot and Turnstile token fields", async () => {
   expect(url).toBe("/public/waitlist");
   expect(body).toMatchObject({ email: "owner@example.com", website: "", turnstile_token: "tok-abc" });
 });
+
+// EMP-WL-008: no confirmation email at launch, so success is shown on the page only, with the
+// existing copy, and nothing on the page claims an email was sent.
+const EMAIL_CLAIM = /inbox|confirmation email|check your (e-?mail|inbox)|we('ve| have) (sent|emailed)|correo de confirmación|revisa tu (correo|bandeja)/i;
+
+test("successful signup shows the on-page success state (existing copy) and claims no email", async () => {
+  api.post.mockResolvedValue({ data: { ok: true, status: "received" } });
+  await renderLanding();
+  const email = container.querySelector('[data-testid="waitlist-email"]');
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+  act(() => {
+    setter.call(email, "owner@example.com");
+    email.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    form().dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  const success = container.querySelector('[data-testid="waitlist-success"]');
+  expect(success).not.toBeNull();
+  expect(success.textContent).toContain("You're on the list.");
+  expect(container.querySelector('[data-testid="waitlist-form"]')).toBeNull(); // replaced by success
+  expect(container.textContent).not.toMatch(EMAIL_CLAIM);
+});
+
+test("estimator waitlist success copy (EN and ES) claims no email", () => {
+  const src = require("fs").readFileSync(require("path").join(__dirname, "../i18n/estimator.js"), "utf8");
+  const sent = src.match(/\bsent: "[^"]*"/g);
+  expect(sent).toHaveLength(2); // EN + ES success lines
+  sent.forEach((line) => expect(line).not.toMatch(EMAIL_CLAIM));
+});

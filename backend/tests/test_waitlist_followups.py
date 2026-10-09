@@ -43,6 +43,7 @@ def env(monkeypatch):
 
     monkeypatch.setattr(mk, "get_db", lambda: db)
     monkeypatch.setattr(mk, "_send_waitlist_confirmation", fake_send)
+    monkeypatch.setenv("WAITLIST_CONFIRMATION_EMAIL", "true")  # WL-008: opt in for these email tests
     monkeypatch.setattr(mk, "_WAITLIST_INDEX_READY", False)
     monkeypatch.delenv("TURNSTILE_ENABLED", raising=False)
     for lim in (mk._DEMO_LIMIT, mk._WAITLIST_IP_MINUTE, mk._WAITLIST_IP_HOUR):
@@ -176,6 +177,7 @@ def test_real_mongo_dedupe_then_unique_index_then_race(monkeypatch):
             await db.waitlist.create_index("email", unique=True)
         monkeypatch.setattr(mk, "get_db", lambda: db)
         monkeypatch.setattr(mk, "_send_waitlist_confirmation", fake_send)
+        monkeypatch.setenv("WAITLIST_CONFIRMATION_EMAIL", "true")  # WL-008: opt in for these email tests
         monkeypatch.setattr(mk, "_WAITLIST_INDEX_READY", False)
         monkeypatch.delenv("TURNSTILE_ENABLED", raising=False)
         for lim in (mk._WAITLIST_IP_MINUTE, mk._WAITLIST_IP_HOUR):
@@ -332,6 +334,7 @@ def test_real_mongo_repeat_signup_fills_blanks_only(monkeypatch):
         await db.waitlist.insert_one({"email": "legacy@example.com", "name": "Legacy"})  # no tier/note fields
         monkeypatch.setattr(mk, "get_db", lambda: db)
         monkeypatch.setattr(mk, "_send_waitlist_confirmation", fake_send)
+        monkeypatch.setenv("WAITLIST_CONFIRMATION_EMAIL", "true")  # WL-008: opt in for these email tests
         monkeypatch.setattr(mk, "_WAITLIST_INDEX_READY", False)
         monkeypatch.delenv("TURNSTILE_ENABLED", raising=False)
         for lim in (mk._WAITLIST_IP_MINUTE, mk._WAITLIST_IP_HOUR):

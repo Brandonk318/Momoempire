@@ -4,6 +4,7 @@
   shaped by a chosen industry preset. No DB tenant touched.
 - POST /api/public/demo/turn → caller utterance → AI reply. Rate-limited by IP.
 - POST /api/public/waitlist → capture email/name/business/interest for early access.
+  No confirmation email unless WAITLIST_CONFIRMATION_EMAIL is explicitly on (EMP-WL-008).
 """
 import asyncio
 import json
@@ -425,7 +426,17 @@ async def verify_turnstile(token: str, remote_ip: str) -> bool:
         return False
 
 
+def confirmation_email_enabled() -> bool:
+    """EMP-WL-008: the waitlist confirmation email is OFF unless WAITLIST_CONFIRMATION_EMAIL is
+    explicitly true/1/yes/on. Off means nothing is sent, queued, claimed or logged per address:
+    the signup only gets the on-page success message. Read per request, so no restart is
+    needed to check the setting in tests."""
+    return (os.environ.get("WAITLIST_CONFIRMATION_EMAIL") or "").strip().lower() in ("1", "true", "yes", "on")
+
+
 async def _send_waitlist_confirmation(email: str) -> None:
+    if not confirmation_email_enabled():  # defense in depth; the endpoint already skips it
+        return
     try:
         from services.email import send_email, _frame
         html = _frame(
@@ -504,8 +515,9 @@ async def waitlist(request: Request, background: BackgroundTasks):
     # Confirmation email: at most once per address, only for the request that created the entry
     # (duplicates and rows from before this change never get another email). An atomic claim
     # guards concurrent requests. Sent after the response so new vs duplicate take about the same
-    # time. Signup volume is bounded by the waitlist IP limiter above. (WL-008 may remove the email.)
-    if inserted:
+    # time. Signup volume is bounded by the waitlist IP limiter above.
+    # EMP-WL-008: off by default. When off, no claim is written and nothing is queued or sent.
+    if inserted and confirmation_email_enabled():
         claim = await db.waitlist.update_one(
             {"email": email, "confirmation_sent_at": {"$exists": False}},
             {"$set": {"confirmation_sent_at": now}},

@@ -119,6 +119,7 @@ def env(monkeypatch):
 
     monkeypatch.setattr(mk, "get_db", lambda: db)
     monkeypatch.setattr(mk, "_send_waitlist_confirmation", fake_send)
+    monkeypatch.setenv("WAITLIST_CONFIRMATION_EMAIL", "true")  # WL-008: opt in for these email tests
     monkeypatch.setattr(mk, "_WAITLIST_INDEX_READY", False)
     monkeypatch.delenv("TURNSTILE_ENABLED", raising=False)
     for lim in (mk._DEMO_LIMIT, mk._WAITLIST_IP_MINUTE, mk._WAITLIST_IP_HOUR):
