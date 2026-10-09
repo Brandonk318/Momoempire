@@ -6,9 +6,10 @@ gets merged, and when.
 
 Checked on 2026-10-08 by merging the whole stack locally in this order (not pushed, not
 deployed). Only four merges conflicted (#18, #13, #16, #19), and the five resolutions in
-section 3 cover them. With those applied (and #26–#32 added as listed in section 1), the
-backend unit suites passed (320, against a throwaway local MongoDB), the frontend suites passed
-(185), and both builds succeeded. The legacy `test_phase*.py`,
+section 3 cover them. They match the four hand resolutions in Watcher's "Final full-stack QC
+(waitlist go/no-go)" (verdict GO); see the reconciliation table in section 3. With those applied
+(and #26–#36 added as listed in section 1), the backend unit suites passed (324, against a
+throwaway local MongoDB), the frontend suites passed (192), and both builds succeeded. The legacy `test_phase*.py`,
 `backend_test.py`, `test_call_to_payment.py` and `test_iteration10_*.py` files need a live
 server, so they were not part of that run.
 
@@ -49,9 +50,17 @@ none of them needs hand resolution (each merges cleanly onto the full stack):
 | #30 | #22 | #22 | WL-082 fixed "Last updated" date |
 | #31 | #20 | #20 | WL-072 canonical + favicon.ico, WL-073 no source maps in the waitlist build |
 | #32 | #21 | #21 | WL-074/075 data-ops credentials + typed DELETE confirmation |
+| #33 | #27 | #27 | WL-062 same answer for known/new emails when writes fail, WL-044 leftovers |
+| #34 | #28 | #28 | WL-093 waitlist bundle has only waitlist strings, WL-094 axe-core devDependency |
+| #35 | #30 | #30 | WL-095 privacy TODO slot for Google Fonts and Cloudflare |
+| #36 | #24 | #24 | WL-092 deploy doc fixes (Turnstile switches, source maps, site metadata, DB-down/index steps) |
 
-Full order as checked locally: #10, #8, #25, #11, #12, #29, #14, #18, #27, #15, #13, #22,
-#30, #17, #24, #16, #19, #23, #28, #20, #31, #21, #32, #26.
+Full order as checked locally: #10, #8, #25, #11, #12, #29, #14, #18, #27, #33, #15, #13, #22,
+#30, #35, #17, #24, #36, #16, #19, #23, #28, #34, #20, #31, #21, #32, #26.
+
+Note for #2 (landing-es): #34 keeps a copy of the waitlist strings in
+`frontend/src/i18n/locales/waitlist.{en,es}.json`. If #2 changes any `landing.*waitlist*` string,
+`WaitlistI18n.test.js` fails until those two files are regenerated from `en.json`/`es.json`.
 
 ## 2. PRs outside the waitlist stack (#1–#7, #9)
 
@@ -73,13 +82,29 @@ against the fully merged stack (`git merge-tree`, 2026-10-08):
 Rule of thumb for #4: merge it **last**. It conflicts with #11, #13, #14 and the Landing
 chain, so resolving it once against the finished stack is the least work.
 
-## 3. Watcher's five hand resolutions
+## 3. Hand resolutions (five here = Watcher's four in the final QC)
+
+Watcher's final full-stack QC ("Final full-stack QC (waitlist go/no-go)", verdict GO) resolved
+four conflicting merges by hand. They are the same fixes as the five resolutions below; this guide
+splits Watcher's #13 item into two (`.env.example` and the Landing imports):
+
+| Watcher final QC | This guide | Same result? |
+|---|---|---|
+| 1. #18 vs #10, `backend/server.py` health: ping, then `waitlist_index_healthy()`, then "ok"; on an exception "degraded" with "service unavailable" | Resolution 1 | Yes, same code |
+| 2. #13, `backend/.env.example` and the `Landing.jsx` import: keep both (#11–#15's FORWARDED_ALLOW_IPS, Turnstile, email and WEB_CONCURRENCY block plus #13's WAITLIST_ONLY and APP_ENV; both the TurnstileWidget and isWaitlistOnly imports) | Resolutions 2 and 3 | Yes. With #27 merged first, its `WAITLIST_DB_TIMEOUT_MS` line is part of the kept block too |
+| 3. #16, `Landing.jsx`: React import `useCallback, useEffect, useRef, useState`; #11's honeypot and `<TurnstileWidget>`, then #16's button | Resolution 4 | Yes |
+| 4. #19 (1572e8c), `Landing.jsx` form: #19's labelled fields and role=alert error, honeypot and TurnstileWidget before the error line, old unlabelled inputs dropped | Resolution 5 | Yes |
+
+Watcher's check after all four: exactly **one honeypot, one Turnstile widget and one submit
+button**, and the health logic as in resolution 1. No other merge in the stack (including
+#25–#36) needs hand resolution.
 
 ### Resolution 1: #18 vs #10, `backend/server.py` (health endpoint)
 
-> **NEVER "keep both sides" here.** Keeping both duplicates the `return`/`except` lines,
-> which makes the file a syntax error or makes the index check unreachable. Replace the whole
-> conflict block with exactly this:
+> **NEVER "keep both sides" here.** Keeping both is valid Python, so nothing fails, but the
+> first `return {"status": "ok"}` makes the WL-040 index check unreachable: health would say
+> "ok" with no unique email index (Watcher's final QC). Replace the whole conflict block with
+> exactly this:
 
 ```python
         await db.command("ping")
@@ -92,16 +117,19 @@ chain, so resolving it once against the finished stack is the least work.
         return {"status": "degraded", "detail": "service unavailable"}
 ```
 
-Check: `python -c "import ast;ast.parse(open('backend/server.py').read())"`, and `GET /api/health`
-returns no exception text.
+Check: the block contains exactly one `return {"status": "ok"}`, it comes **after**
+`waitlist_index_healthy()`, and `GET /api/health` returns no exception text.
 
 ### Resolution 2: #13, `backend/.env.example`
 
-Keep both sides. Every variable name from both branches stays (names only, no values).
+Keep both sides. Every variable name from both branches stays (names only, no values): #11–#15's
+`FORWARDED_ALLOW_IPS`, Turnstile, email and `WEB_CONCURRENCY` block, #13's `WAITLIST_ONLY` and
+`APP_ENV`, and (if #27 is already merged) `WAITLIST_DB_TIMEOUT_MS`.
 
 ### Resolution 3: #13, `frontend/src/pages/Landing.jsx` imports
 
-Keep both sides. Every import from both branches stays. Remove exact duplicate lines only.
+Keep both sides. Every import from both branches stays (`TurnstileWidget` from #11 and
+`isWaitlistOnly` from #13). Remove exact duplicate lines only.
 
 ### Resolution 4: #16, `frontend/src/pages/Landing.jsx`
 
