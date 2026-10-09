@@ -186,3 +186,9 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     await close_db()
+
+
+# EMP-WL-002: WAITLIST_ONLY=true swaps in a minimal app (health + waitlist only; no seeding).
+from waitlist_mode import waitlist_only_enabled, build_waitlist_app  # noqa: E402
+if waitlist_only_enabled():
+    app = build_waitlist_app(app)
