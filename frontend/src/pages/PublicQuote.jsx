@@ -43,6 +43,11 @@ export default function PublicQuote() {
   const business = quote.business?.name || "the business";
   const alreadyDone = ["approved", "accepted"].includes(quote.status);
   const declined = quote.status === "declined";
+  // EMP-W-CF-022: expired quotes and quotes the owner hasn't approved (e.g. dashboard estimates)
+  // can't be accepted, so don't offer a button that always fails.
+  // TODO(Brann): confirm the wording of these two messages.
+  const expired = Boolean(quote.expired);
+  const notApproved = !quote.owner_approved;
   const invoiceToken = accepted?.invoice?.public_token;
 
   return (
@@ -76,6 +81,10 @@ export default function PublicQuote() {
             <p className="text-sm" data-testid="public-quote-already">This quote has already been accepted.</p>
           ) : declined ? (
             <p className="text-sm">This quote is no longer available. Please contact {business}.</p>
+          ) : expired ? (
+            <p className="text-sm" data-testid="public-quote-expired">This quote has expired. Please contact {business} for an updated quote.</p>
+          ) : notApproved ? (
+            <p className="text-sm" data-testid="public-quote-not-approved">This quote can't be accepted online yet. Please contact {business}.</p>
           ) : (
             <Button className="w-full h-11" onClick={accept} disabled={accepting} data-testid="public-quote-accept-btn">
               {accepting ? "Accepting…" : "Accept quote"}

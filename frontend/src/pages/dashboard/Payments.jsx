@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Trash2, Check, Send } from "lucide-react";
+import { canShareQuoteLink } from "@/lib/quoteLinks";
 
 const LineEditor = ({ lines, onChange }) => (
   <div className="space-y-2">
@@ -76,7 +77,10 @@ export default function Payments() {
                     </div>
                     <Badge variant="secondary">{e.status}</Badge>
                     <div className="font-mono text-sm w-24 text-right">${Number(e.total || 0).toFixed(2)}</div>
-                    <Button variant="outline" size="sm" onClick={() => copyEstimateLink(e)} data-testid={`estimate-link-${e.id}`}>Copy link</Button>
+                    {/* EMP-W-CF-022: /q/ only lets a customer accept owner-approved quotes; dashboard estimates
+                        are never approved, so their link would show an Accept that always fails.
+                        TODO(Brann): should the dashboard "Send" step approve estimates (then the link returns)? */}
+                    {canShareQuoteLink(e) && <Button variant="outline" size="sm" onClick={() => copyEstimateLink(e)} data-testid={`estimate-link-${e.id}`}>Copy link</Button>}
                     {e.status === "draft" && <Button variant="outline" size="sm" onClick={() => sendEstimate(e.id)} data-testid={`estimate-send-${e.id}`}><Send className="h-3 w-3 mr-1" />Send</Button>}
                     <Button variant="ghost" size="icon" onClick={() => delEstimate(e.id)}><Trash2 className="h-4 w-4" /></Button>
                   </li>
