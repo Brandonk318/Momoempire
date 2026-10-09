@@ -77,11 +77,18 @@ export default function Estimate() {
     setSent(false);
   };
 
+  // EMP-W-CF-032: on invalid input, move focus to the first invalid field. Its error is linked by
+  // aria-describedby and announced (role="alert"), so screen-reader users hear it.
+  useEffect(() => {
+    if (result?.status !== "invalid") return;
+    const first = ["locations", "users"].find((f) => result.errors[f]);
+    if (first) document.getElementById(`est-${first}`)?.focus();
+  }, [result]);
+
   const sendEmail = async (e) => {
     e.preventDefault();
-    if (!email || !result) return;
+    if (!email || !result || result.status === "invalid") return;
     setSending(true);
-    if (result.status === "invalid") return;
     const tier = result.status === "ok" ? result.plan.key : result.status === "custom" ? "custom" : "unavailable";
     const industryName = industries.find((i) => i.slug === answers.industry)?.name || answers.industry || "";
     const note = [
@@ -134,12 +141,12 @@ export default function Estimate() {
               <div className="space-y-1.5">
                 <label htmlFor="est-locations" className="text-sm text-white/80">{t("estimator.locations")}</label>
                 <Input id="est-locations" type="number" min={1} step={1} max={ESTIMATOR_RULES.maxLocationsInput} required value={answers.locations} onChange={set("locations")} aria-invalid={!!errors.locations} aria-describedby={errors.locations ? "est-locations-error" : undefined} className="bg-white/5 border-white/20 text-white" data-testid="estimate-locations" />
-                {errors.locations && <p id="est-locations-error" className="text-sm text-red-300" data-testid="estimate-locations-error">{t(`estimator.errors.${errors.locations}`)}</p>}
+                {errors.locations && <p id="est-locations-error" role="alert" className="text-sm text-red-300" data-testid="estimate-locations-error">{t(`estimator.errors.${errors.locations}`)}</p>}
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="est-users" className="text-sm text-white/80">{t("estimator.users")}</label>
                 <Input id="est-users" type="number" min={1} step={1} max={ESTIMATOR_RULES.maxUsersInput} required value={answers.users} onChange={set("users")} aria-invalid={!!errors.users} aria-describedby={errors.users ? "est-users-error" : undefined} className="bg-white/5 border-white/20 text-white" data-testid="estimate-users" />
-                {errors.users && <p id="est-users-error" className="text-sm text-red-300" data-testid="estimate-users-error">{t(`estimator.errors.${errors.users}`)}</p>}
+                {errors.users && <p id="est-users-error" role="alert" className="text-sm text-red-300" data-testid="estimate-users-error">{t(`estimator.errors.${errors.users}`)}</p>}
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -194,14 +201,19 @@ export default function Estimate() {
                     </div>
                   )}
                   {/* TODO(marketing): why-this-plan copy */}
-                  <h2 className="mt-5 text-sm text-white/70">{t("estimator.result.limitsHeading")}</h2>
-                  <ul className="mt-2 text-sm grid grid-cols-2 gap-1">
-                    {["calls", "sms", "ai_minutes", "locations", "users"].map((m) => (
-                      typeof result.plan.limits?.[m] === "number" && (
-                        <li key={m}>{t(`estimator.result.limit.${m}`)}: {result.plan.limits[m].toLocaleString()}</li>
-                      )
-                    ))}
-                  </ul>
+                  {/* Limits read like a service you can get today, so they're hidden in waitlist-only mode (CF-032). */}
+                  {!waitlistOnly && (
+                    <>
+                      <h2 className="mt-5 text-sm text-white/70">{t("estimator.result.limitsHeading")}</h2>
+                      <ul className="mt-2 text-sm grid grid-cols-2 gap-1" data-testid="estimate-plan-limits">
+                        {["calls", "sms", "ai_minutes", "locations", "users"].map((m) => (
+                          typeof result.plan.limits?.[m] === "number" && (
+                            <li key={m}>{t(`estimator.result.limit.${m}`)}: {result.plan.limits[m].toLocaleString()}</li>
+                          )
+                        ))}
+                      </ul>
+                    </>
+                  )}
                 </>
               )}
               {result.status === "custom" && (
@@ -216,6 +228,9 @@ export default function Estimate() {
                   {/* TODO(marketing/Brann): custom-plan contact path (sales@ mailbox does not receive mail yet, EMP-WL-004) */}
                 </>
               )}
+              {result.warnings?.includes("ai_minutes_estimated") && result.status !== "unavailable" && (
+                <p className="mt-3 text-xs text-white/60" data-testid="estimate-ai-minutes-estimated">{t("estimator.result.aiMinutesEstimated")}</p>
+              )}
               {result.status === "unavailable" && (
                 <p className="text-white/70" data-testid="estimate-unavailable">{t("estimator.result.unavailable")}</p>
               )}
@@ -228,10 +243,11 @@ export default function Estimate() {
                 {sent ? (
                   <p className="text-sm text-emerald-200" role="status" data-testid="estimate-email-sent">{t("estimator.email.sent")}</p>
                 ) : (
-                  <div className="flex gap-2">
+                  // Stacked on small screens so a long (Spanish) button can't squeeze the email box (CF-032).
+                  <div className="flex flex-col sm:flex-row gap-2" data-testid="estimate-email-row">
                     <label htmlFor="est-email" className="sr-only">{t("estimator.email.label")}</label>
-                    <Input id="est-email" type="email" required maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@yourbusiness.com" className="bg-white/5 border-white/20 text-white" data-testid="estimate-email" />
-                    <Button type="submit" disabled={sending || !email} className="bg-white text-black hover:bg-white/90" data-testid="estimate-email-submit">{t("estimator.email.submit")}</Button>
+                    <Input id="est-email" type="email" required maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@yourbusiness.com" className="w-full sm:flex-1 min-w-[12rem] bg-white/5 border-white/20 text-white" data-testid="estimate-email" />
+                    <Button type="submit" disabled={sending || !email} className="w-full sm:w-auto shrink-0 bg-white text-black hover:bg-white/90" data-testid="estimate-email-submit">{t("estimator.email.submit")}</Button>
                   </div>
                 )}
                 {/* Honeypot: hidden from people and screen readers; bots that fill it are silently ignored. */}

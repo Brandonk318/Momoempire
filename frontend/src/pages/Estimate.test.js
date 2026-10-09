@@ -123,6 +123,7 @@ test("valid answers show the suggested plan with the exact price and pricing lin
   await renderPage();
   answer({ "estimate-calls": "calls_2" });
   expect((await findByTestId("estimate-plan-name")).textContent).toBe("Growth");
+  expect(getByTestId("estimate-plan-limits").textContent).toContain("Calls: 500");
   expect(getByTestId("estimate-plan-price").textContent).toContain("$49.99");
   expect(byTestId("estimate-result-pricing-link")).not.toBeNull();
   expect(byTestId("estimate-header-pricing-link")).not.toBeNull();
@@ -136,6 +137,9 @@ test("AI minutes question is asked and checked against plan.limits.ai_minutes", 
   expect((await findByTestId("estimate-plan-name")).textContent).toBe("High Volume");
   answer({ "estimate-ai-minutes": "ai_unsure" });
   expect((await findByTestId("estimate-plan-name")).textContent).toBe("Starter");
+  expect(getByTestId("estimate-ai-minutes-estimated").textContent).toContain("Not sure");
+  answer({ "estimate-calls": "calls_3", "estimate-ai-minutes": "ai_unsure" });
+  expect((await findByTestId("estimate-plan-name")).textContent).toBe("High Volume"); // not under-suggested
   answer({ "estimate-ai-minutes": "ai_5" });
   expect(getByTestId("estimate-result").textContent).toContain("Above standard limits: AI minutes");
 });
@@ -206,6 +210,8 @@ test("waitlist-only mode: no price, no pricing/trial links, planned-pricing slot
   expect((await findByTestId("estimate-plan-name")).textContent).toBe("AI Office");
   expect(byTestId("estimate-planned-pricing-slot")).not.toBeNull();
   expect(byTestId("estimate-plan-price")).toBeNull();
+  expect(byTestId("estimate-plan-limits")).toBeNull(); // CF-032: limits hidden too
+  expect(getByTestId("estimate-result").textContent).not.toMatch(/Monthly limits|Calls:|1,500|3,000|650/);
   expect(text()).not.toMatch(/\$\d/);
   expect(byTestId("estimate-result-pricing-link")).toBeNull();
   expect(byTestId("estimate-header-pricing-link")).toBeNull();
@@ -222,5 +228,33 @@ test("Spanish strings exist for the new labels", async () => {
   expect((await findByTestId("estimate-users-error")).textContent).toBe("Ingrese un número entero de 1 o más.");
   answer({ "estimate-users": "1" });
   await findByTestId("estimate-result");
+  expect(getByTestId("estimate-email-submit").textContent).toBe("Unirse a la lista de espera");
+});
+
+// ---------- EMP-W-CF-032: errors announced + focus; mobile layout ----------
+test("invalid input: error is announced (role=alert) and focus moves to the invalid field", async () => {
+  await renderPage();
+  answer({ "estimate-locations": "1", "estimate-users": "0" });
+  const err = await findByTestId("estimate-users-error");
+  expect(err.getAttribute("role")).toBe("alert");
+  await flush();
+  expect(document.activeElement).toBe(getByTestId("estimate-users"));
+  expect(document.activeElement.getAttribute("aria-describedby")).toBe("est-users-error");
+  answer({ "estimate-locations": "-1", "estimate-users": "0" });
+  await flush();
+  expect(document.activeElement).toBe(getByTestId("estimate-locations")); // first invalid field
+});
+
+test("email row stacks on small screens and the input keeps a minimum width (Spanish button)", async () => {
+  await i18n.changeLanguage("es");
+  await renderPage();
+  answer({});
+  await findByTestId("estimate-result");
+  const row = getByTestId("estimate-email-row");
+  expect(row.className).toMatch(/\bflex-col\b/);
+  expect(row.className).toMatch(/\bsm:flex-row\b/);
+  expect(getByTestId("estimate-email").className).toMatch(/\bw-full\b/);
+  expect(getByTestId("estimate-email").className).toMatch(/min-w-\[12rem\]/);
+  expect(getByTestId("estimate-email-submit").className).toMatch(/\bw-full\b/);
   expect(getByTestId("estimate-email-submit").textContent).toBe("Unirse a la lista de espera");
 });

@@ -136,8 +136,30 @@ test("calls fit AI Office but minutes do not -> next plan up", () => {
   expect(over.exceeded).toEqual(["ai_minutes"]);
 });
 
-test("'not sure' on AI minutes is not counted", () => {
-  expect(keyOf({ aiMinutesBand: ESTIMATOR_RULES.aiMinutesUnsureId, callsBand: "calls_2" })).toBe("growth");
+// EMP-W-CF-032: "Not sure" must not under-suggest: AI minutes floor = call band max x placeholder ratio.
+const UNSURE = ESTIMATOR_RULES.aiMinutesUnsureId;
+test.each([
+  ["calls_1", "starter"],       // 150 x 0.5 = 75 <= 100
+  ["calls_2", "growth"],        // 500 x 0.5 = 250 <= 300
+  ["calls_3", "high_volume"],   // 1,500 x 0.5 = 750 > 650 (AI Office) -> High Volume
+  ["calls_4", "custom"],        // 4,000 x 0.5 = 2,000 > 1,400
+  ["calls_5", "custom"],
+])("'Not sure' AI minutes with %s -> %s (conservative floor)", (callsBand, expected) => {
+  expect(keyOf({ aiMinutesBand: UNSURE, callsBand })).toBe(expected);
+});
+
+test("'Not sure' never suggests a smaller plan than the explicit band would at that ratio", () => {
+  const r = matchPlan({ ...base, aiMinutesBand: UNSURE, callsBand: "calls_4" }, PLANS);
+  expect(r.exceeded).toEqual(["ai_minutes"]);
+  expect(r.warnings).toContain("ai_minutes_estimated");
+  expect(requirementsFrom({ aiMinutesBand: UNSURE, callsBand: "calls_3" }).ai_minutes).toBe(750);
+  expect(matchPlan({ ...base, aiMinutesBand: "ai_1" }, PLANS).warnings).not.toContain("ai_minutes_estimated");
+});
+
+test("'Not sure' floor is a placeholder: ratio 0 ignores it again", () => {
+  const rules = { ...ESTIMATOR_RULES, aiMinutesPerCallIfUnsure: 0 };
+  expect(matchPlan({ ...base, aiMinutesBand: UNSURE, callsBand: "calls_3" }, PLANS, rules).plan.key).toBe("ai_office");
+  expect(ESTIMATOR_RULES.aiMinutesPerCallIfUnsure).toBe(0.5);
 });
 
 test("plan without an ai_minutes limit is not matched when minutes were answered", () => {

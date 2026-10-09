@@ -36,7 +36,7 @@ export const ESTIMATOR_RULES = {
 
   // PLACEHOLDER: AI-answered minutes per month, matched against plan.limits.ai_minutes.
   // Upper bounds mirror today's seeded ai_minutes limits (backend/routers/plans.py) so each band
-  // lands on one plan; Brann to confirm. "ai_unsure" has no max: not counted in matching.
+  // lands on one plan; Brann to confirm.
   aiMinutesBands: [
     { id: "ai_1", max: 100 },
     { id: "ai_2", max: 300 },
@@ -45,6 +45,12 @@ export const ESTIMATOR_RULES = {
     { id: "ai_5", max: null },
   ],
   aiMinutesUnsureId: "ai_unsure",
+  // PLACEHOLDER (EMP-W-CF-032): "Not sure" must not under-suggest, so it assumes this many AI minutes
+  // per call in the chosen call band (ceil(band max x value)). 0.5 is a placeholder between the
+  // seeded plans' own ratios (0.35-0.67 AI minutes per call); the PRD doesn't define one. With 0.5,
+  // "Not sure" moves 501-1,500 calls from AI Office to High Volume and 1,501-4,000 calls to Custom.
+  // Set to 0 to ignore "Not sure" again. Brann to confirm.
+  aiMinutesPerCallIfUnsure: 0.5,
 
   // Input caps for the number fields (not tier thresholds).
   maxLocationsInput: 999,

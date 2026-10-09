@@ -37,6 +37,7 @@ const en = {
       customBody: "Your answers go beyond our standard plans.",
       exceeded: "Above standard limits: {{list}}",
       unavailable: "Plan details aren't available right now. Please try again later.",
+      aiMinutesEstimated: "AI minutes estimated from your call volume because you chose \"Not sure\".",
       seePricing: "See all plans",
     },
     // Honest label (EMP-W-CF-029): this form adds the email to the waitlist; no result email exists.
@@ -91,6 +92,7 @@ const es = {
       customBody: "Sus respuestas superan nuestros planes estándar.",
       exceeded: "Por encima de los límites estándar: {{list}}",
       unavailable: "Los detalles de los planes no están disponibles ahora. Inténtelo más tarde.",
+      aiMinutesEstimated: "Minutos de IA estimados a partir de sus llamadas porque eligió \"No estoy seguro\".",
       seePricing: "Ver todos los planes",
     },
     email: {
