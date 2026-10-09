@@ -3,14 +3,20 @@ import re
 
 MIN_LENGTH = 12
 
-# Known-weak values that must never be accepted (incl. the old seeded default).
-WEAK_DENYLIST = frozenset(p.lower() for p in {
+# Known-weak / previously shipped default passwords (original case, so stored hashes can be
+# checked against them). Includes the old seeded admin default. Never accepted as a new password,
+# and any existing admin hash matching one is replaced at startup (seed_data.seed_admin).
+KNOWN_DEFAULT_PASSWORDS = (
     "AdminPass123!",
     "Password123!",
     "ChangeMe123!",
     "Admin123456!",
     "Welcome123!!",
-})
+    "admin",
+    "password",
+    "changeme",
+)
+WEAK_DENYLIST = frozenset(p.lower() for p in KNOWN_DEFAULT_PASSWORDS)
 
 
 def password_problems(password: str) -> list[str]:

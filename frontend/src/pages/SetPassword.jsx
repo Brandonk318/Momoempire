@@ -36,7 +36,7 @@ export default function SetPassword() {
     try {
       await api.post("/auth/set-password", {
         new_password: pw,
-        current_password: forced ? null : current,
+        current_password: current,
       });
       setUser({ ...user, must_change_password: false });
       toast.success("Password updated");
@@ -55,14 +55,13 @@ export default function SetPassword() {
         {forced && (
           <p className="text-sm text-muted-foreground" role="status">
             For security, you must choose a new strong password before continuing.
+            If you don't know your current password, log out and use "Forgot password".
           </p>
         )}
-        {!forced && (
-          <div className="space-y-1.5">
-            <Label htmlFor="current-password">Current password</Label>
-            <Input id="current-password" type="password" autoComplete="current-password" required value={current} onChange={(e) => setCurrent(e.target.value)} />
-          </div>
-        )}
+        <div className="space-y-1.5">
+          <Label htmlFor="current-password">Current password</Label>
+          <Input id="current-password" type="password" autoComplete="current-password" required value={current} onChange={(e) => setCurrent(e.target.value)} data-testid="set-password-current" />
+        </div>
         <div className="space-y-1.5">
           <Label htmlFor="new-password">New password</Label>
           <Input id="new-password" type="password" autoComplete="new-password" required value={pw} onChange={(e) => setPw(e.target.value)} aria-describedby="password-rules" data-testid="set-password-new" />
@@ -77,7 +76,7 @@ export default function SetPassword() {
           <Input id="confirm-password" type="password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} aria-invalid={mismatch} data-testid="set-password-confirm" />
           {mismatch && <p className="text-xs text-rose-600" role="alert">Passwords do not match</p>}
         </div>
-        <Button type="submit" className="w-full" disabled={loading || problems.length > 0 || pw !== confirm} data-testid="set-password-submit">
+        <Button type="submit" className="w-full" disabled={loading || !current || problems.length > 0 || pw !== confirm} data-testid="set-password-submit">
           {loading ? "Saving…" : "Save password"}
         </Button>
         <button type="button" className="text-sm underline text-muted-foreground" onClick={logout}>Log out</button>

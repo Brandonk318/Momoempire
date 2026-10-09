@@ -96,6 +96,11 @@ async def register(data: RegisterIn, response: Response):
     return user_doc
 
 
+def _is_known_default(password: str) -> bool:
+    from password_policy import KNOWN_DEFAULT_PASSWORDS
+    return (password or "") in KNOWN_DEFAULT_PASSWORDS
+
+
 @router.post("/login")
 async def login(data: LoginIn, request: Request, response: Response):
     db = get_db()
@@ -106,6 +111,18 @@ async def login(data: LoginIn, request: Request, response: Response):
 
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(data.password, user["password_hash"]):
+        await _record_failure(db, identifier)
+        raise HTTPException(401, "Invalid email or password")
+
+    if user.get("role") == "platform_admin" and _is_known_default(data.password):
+        # Defense in depth (startup seed normally already replaced this hash): never let a
+        # known default password sign in as admin; neutralize it and require the reset flow.
+        import secrets
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {"password_hash": hash_password(secrets.token_urlsafe(48)),
+                      "password_unusable": True, "must_change_password": True}},
+        )
         await _record_failure(db, identifier)
         raise HTTPException(401, "Invalid email or password")
 
@@ -135,11 +152,16 @@ async def set_password(data: SetPasswordIn, user: dict = Depends(get_current_use
     full = await db.users.find_one({"id": user["id"]})
     if not full:
         raise HTTPException(404, "User not found")
-    forced = bool(full.get("must_change_password"))
-    if not forced:
-        # Normal change: must prove the current password.
-        if not data.current_password or not verify_password(data.current_password, full.get("password_hash") or ""):
-            raise HTTPException(400, "Current password is incorrect")
+    if full.get("password_unusable"):
+        # No usable password (seeded without one, or a known default was neutralized):
+        # the only way in is the emailed reset-token flow.
+        raise HTTPException(403, "No password is set for this account. Use 'Forgot password' to set one.")
+    # Always prove the current password, including forced first-login changes, so a leaked
+    # or default password alone can never be used to take over the account.
+    if not data.current_password or not verify_password(data.current_password, full.get("password_hash") or ""):
+        raise HTTPException(400, "Current password is incorrect")
+    if full.get("role") == "platform_admin" and _is_known_default(data.current_password):
+        raise HTTPException(403, "This account's password is a known default. Use 'Forgot password' to set one.")
     if full.get("password_hash") and verify_password(data.new_password, full["password_hash"]):
         raise HTTPException(400, "New password must differ from the current one")
     await db.users.update_one(
@@ -228,6 +250,7 @@ async def reset_password(data: ResetIn):
             raise HTTPException(400, "Password " + "; ".join(problems))
         patch["must_change_password"] = False
         patch["password_changed_at"] = _now_iso()
+    patch["password_unusable"] = False
     await db.users.update_one({"id": rec["user_id"]}, {"$set": patch})
     await db.password_reset_tokens.update_one({"token": data.token}, {"$set": {"used": True}})
     return {"status": "ok"}
