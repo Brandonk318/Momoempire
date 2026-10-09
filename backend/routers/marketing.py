@@ -5,6 +5,7 @@
 - POST /api/public/demo/turn → caller utterance → AI reply. Rate-limited by IP.
 - POST /api/public/waitlist → capture email/name/business/interest for early access.
 """
+import asyncio
 import json
 import logging
 import os
@@ -207,6 +208,8 @@ WAITLIST_MAX_BODY_BYTES = 16 * 1024
 _WAITLIST_IP_MINUTE = SlidingLimiter(5, 60.0)        # signups per IP per minute
 _WAITLIST_IP_HOUR = SlidingLimiter(30, 3600.0)       # signups per IP per hour
 _WAITLIST_INDEX_READY = False
+_WAITLIST_INDEX_LOCK = asyncio.Lock()
+WAITLIST_DUPLICATES_COLLECTION = "waitlist_duplicates"  # archive for de-duplicated rows (never deleted)
 
 # Honeypot: a visually hidden input on the landing form that humans leave empty.
 HONEYPOT_FIELD = "website"
@@ -248,19 +251,128 @@ async def _read_capped_body(request: Request, cap: int) -> bytes:
     return body
 
 
+def normalize_email(value) -> str:
+    """Canonical waitlist key: trimmed + lowercased (EMP-WL-012)."""
+    return (value or "").strip().lower() if isinstance(value, str) else ""
+
+
+def _doc_time(doc) -> str:
+    """Sort key for 'earliest': created_at (ISO, UTC) else the ObjectId's creation time."""
+    ts = doc.get("created_at")
+    if isinstance(ts, str) and ts:
+        return ts
+    oid = doc.get("_id")
+    gen = getattr(oid, "generation_time", None)
+    return gen.isoformat() if gen is not None else "9999"
+
+
+async def dedupe_waitlist(db, apply: bool = True) -> dict:
+    """De-duplicate waitlist rows by normalized email before the unique index is built (EMP-WL-024).
+
+    Keeps the EARLIEST row per normalized email. Later duplicates are copied in full into
+    `waitlist_duplicates` (with duplicate_of/archived_at) and only then removed from `waitlist`;
+    nothing is merged into the kept row. A kept row whose email isn't normalized gets the
+    normalized value, with the original kept in `email_original`. Idempotent and safe to run in
+    several processes at once (archive is an upsert by _id; removal is by _id).
+    apply=False is a dry run: counts only, no writes.
+    """
+    groups: dict[str, list] = {}
+    scanned = 0
+    async for d in db.waitlist.find({}, {"_id": 1, "email": 1, "created_at": 1}):
+        scanned += 1
+        norm = normalize_email(d.get("email"))
+        if norm:
+            groups.setdefault(norm, []).append(d)
+    stats = {"scanned": scanned, "duplicate_groups": 0, "archived": 0, "normalized": 0, "dry_run": not apply}
+    now = _now_iso()
+    for norm, docs in groups.items():
+        docs.sort(key=lambda d: (_doc_time(d), str(d.get("_id"))))
+        keep, extra = docs[0], docs[1:]
+        if extra:
+            stats["duplicate_groups"] += 1
+        for d in extra:
+            stats["archived"] += 1
+            if not apply:
+                continue
+            full = await db.waitlist.find_one({"_id": d["_id"]})
+            if full is None:  # already handled by another process
+                continue
+            archived = {**full, "duplicate_of": keep.get("_id"), "archived_at": now, "archived_reason": "duplicate email"}
+            await db[WAITLIST_DUPLICATES_COLLECTION].replace_one({"_id": full["_id"]}, archived, upsert=True)
+            await db.waitlist.delete_one({"_id": full["_id"]})
+        if keep.get("email") != norm:
+            stats["normalized"] += 1
+            if apply:
+                await db.waitlist.update_one(
+                    {"_id": keep["_id"]}, {"$set": {"email": norm, "email_original": keep.get("email")}})
+    if stats["duplicate_groups"] or stats["normalized"]:
+        log.warning("waitlist dedupe%s: scanned=%d duplicate_groups=%d archived=%d normalized=%d",
+                    "" if apply else " (dry run)", stats["scanned"], stats["duplicate_groups"],
+                    stats["archived"], stats["normalized"])
+    else:
+        log.info("waitlist dedupe: scanned=%d, no duplicates", stats["scanned"])
+    return stats
+
+
 async def _ensure_waitlist_index(db) -> None:
+    """Once per process: de-duplicate, then build the unique index on the normalized email.
+
+    Runs at app startup (router startup hook) and again lazily before the first signup if that
+    didn't complete (e.g. the DB wasn't reachable at boot, or the WL-002 waitlist-only app).
+    """
     global _WAITLIST_INDEX_READY
     if _WAITLIST_INDEX_READY:
         return
+    async with _WAITLIST_INDEX_LOCK:
+        if _WAITLIST_INDEX_READY:
+            return
+        await dedupe_waitlist(db, apply=True)  # DB errors propagate: retried on the next call
+        try:
+            await db.waitlist.create_index("email", unique=True)
+        except Exception:
+            # Rows inserted between the scan and the build can still collide; the upsert and the
+            # atomic confirmation claim keep signups correct, and the next process start retries.
+            log.error("waitlist: could not build unique email index after dedupe", exc_info=True)
+        _WAITLIST_INDEX_READY = True
+
+
+@router.on_event("startup")
+async def _waitlist_startup() -> None:
     try:
-        await db.waitlist.create_index("email", unique=True)
-    except Exception:  # e.g. pre-existing duplicates; the atomic claim below still prevents re-sends
-        log.warning("waitlist: could not ensure unique email index", exc_info=True)
-    _WAITLIST_INDEX_READY = True
+        await _ensure_waitlist_index(get_db())
+    except Exception:
+        log.warning("waitlist: startup dedupe/index skipped (will retry on first signup)", exc_info=True)
 
 
 def turnstile_enabled() -> bool:
     return (os.environ.get("TURNSTILE_ENABLED") or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def check_turnstile_config() -> None:
+    """EMP-WL-023: refuse to start when Turnstile is on but has no secret.
+
+    Otherwise every real signup would get 400. Called at import, so uvicorn exits with this error
+    in both the full app and the WL-002 waitlist-only app.
+    """
+    if turnstile_enabled() and not (os.environ.get("TURNSTILE_SECRET_KEY") or "").strip():
+        msg = ("TURNSTILE_ENABLED is on but TURNSTILE_SECRET_KEY is empty. Refusing to start: every "
+               "waitlist signup would be rejected. Set TURNSTILE_SECRET_KEY or turn TURNSTILE_ENABLED off.")
+        log.critical(msg)
+        raise RuntimeError(msg)
+
+
+def check_single_worker() -> None:
+    """EMP-WL-021: the waitlist/demo limiters live in process memory. More than one worker
+    multiplies the limits (2 workers let 7 of 12 through instead of 5). Warn loudly."""
+    raw = (os.environ.get("WEB_CONCURRENCY") or "").strip()
+    try:
+        workers = int(raw) if raw else 1
+    except ValueError:
+        workers = 1
+    if workers > 1:
+        log.error("WEB_CONCURRENCY=%s: the waitlist and demo rate limits are per process, so each worker "
+                  "allows its own quota. Run ONE worker for the waitlist deploy "
+                  "(docs/deploy/client-ip-and-proxies.md, 'One worker').", raw)
 
 
 async def verify_turnstile(token: str, remote_ip: str) -> bool:
@@ -328,7 +440,7 @@ async def waitlist(request: Request, background: BackgroundTasks):
 
     db = get_db()
     await _ensure_waitlist_index(db)
-    email = data.email.lower()
+    email = normalize_email(data.email)
     now = _now_iso()
     doc = {
         "id": _uuid(), "email": email, "name": data.name or "",
@@ -354,3 +466,7 @@ async def waitlist(request: Request, background: BackgroundTasks):
         if getattr(claim, "modified_count", 0) == 1:
             background.add_task(_send_waitlist_confirmation, data.email)
     return dict(WAITLIST_RESPONSE)
+
+
+check_turnstile_config()
+check_single_worker()

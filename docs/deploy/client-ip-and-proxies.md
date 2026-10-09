@@ -13,10 +13,40 @@ Uvicorn sets that from `X-Forwarded-For` **only** when the direct peer is listed
 | Setup | Backend peer seen by uvicorn | `FORWARDED_ALLOW_IPS` |
 |---|---|---|
 | Uvicorn directly on the host, Nginx or cloudflared on the same host | `127.0.0.1` | empty (defaults to `127.0.0.1`) |
-| `docker compose` (this repo), Nginx or cloudflared on the host | compose gateway `172.30.0.1` (fixed in `docker-compose.yml`) | `172.30.0.1` |
+| `docker compose` (this repo), Nginx or cloudflared on the host | compose gateway, `172.30.0.1` by default | set automatically by `docker-compose.yml` from `AIO_COMPOSE_GATEWAY` (default `172.30.0.1`) |
 | Cloudflare proxy straight to uvicorn, no Nginx | Cloudflare edge IPs (CIDR ranges) | **Not supported on uvicorn 0.25.** Put Nginx in front, use a Tunnel, or upgrade uvicorn to 0.31+ (CF-003) and list the ranges. |
 
 Never use `*`.
+
+### Compose subnet (EMP-WL-025)
+`FORWARDED_ALLOW_IPS` **must equal the compose network's gateway**. If it doesn't, uvicorn ignores
+`X-Forwarded-For` from your proxy, and every visitor shares the proxy's rate-limit bucket.
+- The default network is `172.30.0.0/24`, with gateway `172.30.0.1`. That can clash with an existing
+  Docker network or a VPN route on the host. Compose then fails with "Pool overlaps with other one
+  on this address space".
+- To change it, set both values in a `.env` file next to `docker-compose.yml`:
+  ```
+  AIO_COMPOSE_SUBNET=10.213.47.0/24
+  AIO_COMPOSE_GATEWAY=10.213.47.1
+  ```
+  Pick any private /24 that `ip route` and `docker network inspect` don't already show.
+- `docker-compose.yml` sets the backend's `FORWARDED_ALLOW_IPS` from `AIO_COMPOSE_GATEWAY`, so the
+  two can't drift. The compose value overrides any `FORWARDED_ALLOW_IPS` in `backend/.env`.
+- To check: `docker compose config | grep -A3 ipam`, then send one request through the proxy and
+  confirm the stored waitlist `ip` is the visitor's.
+
+## One worker (EMP-WL-021)
+The waitlist and demo rate limits (5/min and 30/h per IP for the waitlist, 20/min for the demo) are
+kept **in process memory**. With N uvicorn workers, each worker has its own counters, so a client can
+get up to N times the limit. Watcher measured 7 of 12 accepted with 2 workers, instead of 5. Counters
+also reset on restart.
+- The Dockerfile runs `--workers 1`, and both the image and compose set `WEB_CONCURRENCY=1`.
+- The app logs an **error** at startup if `WEB_CONCURRENCY` > 1, for example on a non-Docker host
+  running `uvicorn` with a higher value.
+- Don't run compose `--scale backend=N` or multiple replicas behind one domain for the waitlist.
+- One worker is enough for a waitlist. Each signup is a few ms of work (Watcher measured a median of
+  about 3–4 ms; estimate). If the full app ever needs more workers, move the limiter to a shared
+  store first (MongoDB TTL counter, Redis, or Cloudflare rate limiting rules).
 
 ## Production value: Cloudflare's IP ranges (in Nginx)
 Cloudflare publishes its edge ranges here (official): **https://www.cloudflare.com/ips/**. Plain-text lists:
