@@ -59,7 +59,6 @@ def test_cli_rejects_bad_fields_before_touching_the_db(monkeypatch, capsys):
 
 
 def test_cli_needs_db_env(monkeypatch, capsys):
-    monkeypatch.setattr(wd, "_load_env", lambda: None)
     monkeypatch.delenv("MONGO_URL", raising=False)
     monkeypatch.delenv("DB_NAME", raising=False)
     assert wd.main(["export"]) == 2
@@ -136,15 +135,19 @@ def test_delete_dry_run_counts_and_keeps_everything(db):
 
 def test_delete_apply_removes_all_copies_and_nothing_else(db):
     log, echo = _out()
-    assert wd.run_delete(db, " owner@example.com ", apply=True, echo=echo) == 0
+    assert wd.run_delete(db, " owner@example.com ", apply=True, echo=echo, confirm=lambda _p: "DELETE\n") == 0
     assert sorted(d["id"] for d in db.waitlist.find()) == ["3"]
     assert sorted(d["id"] for d in db.waitlist_duplicates.find()) == ["6"]
     assert db.unrelated.count_documents({}) == 1  # other collections untouched
     assert log[-1] == "deleted 2 from waitlist, 2 from waitlist_duplicates; remaining matches: 0"
     # Idempotent.
     log2, echo2 = _out()
-    assert wd.run_delete(db, "owner@example.com", apply=True, echo=echo2) == 0
+    assert wd.run_delete(db, "owner@example.com", apply=True, echo=echo2, confirm=_never) == 0
     assert log2[0] == "delete: matches 0 row(s) in waitlist, 0 in waitlist_duplicates"
+
+
+def _never(prompt):
+    raise AssertionError("must not ask for confirmation")
 
 
 def test_delete_rejects_garbage(db):
@@ -154,11 +157,128 @@ def test_delete_rejects_garbage(db):
 
 
 def test_cli_end_to_end_reads_email_from_stdin(db, monkeypatch, capsys):
-    monkeypatch.setattr(wd, "_load_env", lambda: None)
     monkeypatch.setenv("MONGO_URL", MONGO)
     monkeypatch.setenv("DB_NAME", db.name)
     monkeypatch.setattr(sys, "stdin", io.StringIO("other@example.com\n"))
-    assert wd.main(["delete", "--apply"]) == 0
+    assert wd.main(["delete", "--apply", "--confirm", "DELETE"]) == 0
     out = capsys.readouterr().out
     assert "deleted 1 from waitlist, 1 from waitlist_duplicates" in out
     assert "other@example.com" not in out
+
+
+# ---------- EMP-WL-075: typed confirmation before --apply deletes ----------
+@pytest.mark.parametrize("answer", ["", "\n", "y", "yes", "delete", "DELETE NOW", None])
+def test_delete_apply_needs_the_typed_word(db, answer):
+    log, echo = _out()
+    prompts = []
+
+    def confirm(prompt):
+        prompts.append(prompt)
+        return answer
+    assert wd.run_delete(db, "owner@example.com", apply=True, echo=echo, confirm=confirm) == 3
+    assert prompts == ["Type DELETE to delete these row(s): "]
+    assert log[0] == "delete: matches 2 row(s) in waitlist, 2 in waitlist_duplicates"  # counts first
+    assert log[-1] == "not confirmed: nothing deleted"
+    assert db.waitlist.count_documents({}) == 3 and db.waitlist_duplicates.count_documents({}) == 3
+
+
+def test_delete_dry_run_never_asks(db):
+    log, echo = _out()
+    assert wd.run_delete(db, "owner@example.com", apply=False, echo=echo, confirm=_never) == 0
+
+
+def test_cli_apply_without_terminal_or_confirm_deletes_nothing(db, monkeypatch, capsys):
+    monkeypatch.setenv("MONGO_URL", MONGO)
+    monkeypatch.setenv("DB_NAME", db.name)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("other@example.com\n"))
+    monkeypatch.setattr(wd, "_confirm_from_tty", lambda prompt: "")  # no terminal
+    assert wd.main(["delete", "--apply"]) == 3
+    assert "not confirmed" in capsys.readouterr().out
+    assert db.waitlist.count_documents({}) == 3
+
+
+def test_cli_wrong_confirm_value_deletes_nothing(db, monkeypatch):
+    monkeypatch.setenv("MONGO_URL", MONGO)
+    monkeypatch.setenv("DB_NAME", db.name)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("other@example.com\n"))
+    assert wd.main(["delete", "--apply", "--confirm", "yes"]) == 3
+    assert db.waitlist.count_documents({}) == 3
+
+
+# ---------- EMP-WL-074: credentials from env or a 0600 file, never backend/.env ----------
+def test_never_reads_backend_env(monkeypatch, capsys):
+    monkeypatch.delenv("MONGO_URL", raising=False)
+    monkeypatch.delenv("DB_NAME", raising=False)
+    import dotenv
+    monkeypatch.setattr(dotenv, "load_dotenv", lambda *a, **k: pytest.fail("backend/.env must not be loaded"))
+    assert wd.main(["export"]) == 2
+    assert "backend/.env is never read" in capsys.readouterr().err
+    src = (Path(wd.__file__)).read_text()
+    assert "load_dotenv" not in src and 'BACKEND / ".env"' not in src
+
+
+def test_env_file_must_be_private(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("MONGO_URL", raising=False)
+    f = tmp_path / "wl.env"
+    f.write_text("MONGO_URL=mongodb://127.0.0.1:9\nDB_NAME=x\n")
+    f.chmod(0o644)
+    assert wd.main(["export", "--env-file", str(f)]) == 2
+    assert "0600" in capsys.readouterr().err
+    assert wd.main(["export", "--env-file", str(tmp_path / "missing.env")]) == 2
+
+
+def test_env_file_supplies_the_dedicated_uri(db, tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("MONGO_URL", raising=False)
+    monkeypatch.delenv("DB_NAME", raising=False)
+    f = tmp_path / "wl.env"
+    f.write_text(f"MONGO_URL={MONGO}\nDB_NAME={db.name}\n")
+    f.chmod(0o600)
+    assert wd.main(["export", "--env-file", str(f)]) == 0
+    out = capsys.readouterr().out
+    assert "export: 3 waitlist row(s)" in out and MONGO not in out
+
+
+def test_runbook_mongosh_example_keeps_secrets_off_the_command_line():
+    doc = (Path(wd.__file__).resolve().parents[2] / "docs" / "ops" / "waitlist-data.md").read_text()
+    assert '"$MONGO_URL' not in doc and "$MONGO_URL/" not in doc
+    assert "Put it in `backend/.env`" not in doc
+    for line in doc.splitlines():
+        if line.lstrip().startswith("mongosh "):
+            assert "mongodb://" not in line and "mongodb+srv://" not in line and "$" not in line, line
+
+
+def test_confirmation_is_read_from_a_real_terminal():
+    """Regression: a text-mode "r+" open of /dev/tty fails (not seekable), which made every
+    interactive confirmation fail. Run the real function under a pseudo-terminal."""
+    pty = pytest.importorskip("pty")
+    import select
+    import time
+    script = Path(wd.__file__).resolve()
+    pid, fd = pty.fork()
+    if pid == 0:  # child
+        try:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("wd_child", script)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            got = mod._confirm_from_tty("Type DELETE: ")
+            os._exit(0 if got.strip() == "DELETE" else 1)
+        except BaseException:
+            os._exit(2)
+    out, sent, t0 = b"", False, time.time()
+    while time.time() - t0 < 10:
+        r, _, _ = select.select([fd], [], [], 0.5)
+        if r:
+            try:
+                chunk = os.read(fd, 1024)
+            except OSError:
+                break
+            if not chunk:
+                break
+            out += chunk
+            if not sent and b"Type DELETE" in out:
+                os.write(fd, b"DELETE\r")
+                sent = True
+    _, status = os.waitpid(pid, 0)
+    assert sent, out
+    assert os.waitstatus_to_exitcode(status) == 0, out

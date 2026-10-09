@@ -6,7 +6,7 @@ DRY RUN BY DEFAULT: nothing is written or deleted unless you pass --apply.
     python scripts/waitlist_data.py export                       # dry run: row count + columns
     python scripts/waitlist_data.py export --out /secure/wl.csv --apply
     python scripts/waitlist_data.py delete                       # dry run; email read from stdin
-    python scripts/waitlist_data.py delete --apply               # deletes after the dry-run counts
+    python scripts/waitlist_data.py delete --apply               # counts, then asks you to type DELETE
 
 - Scope: only the `waitlist` collection (export) and `waitlist` + `waitlist_duplicates`
   (delete; the archive collection exists once PR #14's dedupe has run). Nothing else is touched.
@@ -17,7 +17,11 @@ DRY RUN BY DEFAULT: nothing is written or deleted unless you pass --apply.
   in `email` and in the archived `email_original`. The email is read from stdin (not argv) so it
   does not land in shell history or the process list.
 - Output is counts only: no email addresses or other row data are printed or logged.
-Reads MONGO_URL and DB_NAME (and backend/.env if python-dotenv is installed).
+- Credentials (EMP-WL-074): MONGO_URL and DB_NAME come from the environment or from
+  --env-file PATH (a 0600 file holding the DEDICATED least-privilege user's URI). backend/.env
+  (the app's own credentials) is never read.
+- Delete --apply (EMP-WL-075) shows the counts, then asks you to type DELETE on the terminal.
+  Without a terminal, pass --confirm DELETE. TODO(Brann): production check and audit record.
 """
 from __future__ import annotations
 
@@ -112,7 +116,7 @@ def run_export(db, out: str | None, fields: tuple[str, ...], apply: bool, echo=p
     return 0
 
 
-def run_delete(db, email: str, apply: bool, echo=print) -> int:
+def run_delete(db, email: str, apply: bool, echo=print, confirm=None) -> int:
     try:
         flt = email_filter(email)
     except ValueError:
@@ -123,18 +127,52 @@ def run_delete(db, email: str, apply: bool, echo=print) -> int:
     if not apply:
         echo("dry run: nothing deleted (pass --apply to delete)")
         return 0
+    if counts[WAITLIST] + counts[ARCHIVE] == 0:
+        echo("nothing to delete")
+        return 0
+    # EMP-WL-075: cheap safeguard, a typed confirmation after the counts are on screen.
+    # TODO(Brann): production check (e.g. APP_ENV) and an audit record (who/when/request ID,
+    # no email) are not decided yet; add them here.
+    answer = (confirm or _confirm_from_tty)(f"Type {CONFIRM_WORD} to delete these row(s): ")
+    if (answer or "").strip() != CONFIRM_WORD:
+        echo("not confirmed: nothing deleted")
+        return 3
     deleted = {c: db[c].delete_many(flt).deleted_count for c in (WAITLIST, ARCHIVE)}
     left = sum(db[c].count_documents(flt) for c in (WAITLIST, ARCHIVE))
     echo(f"deleted {deleted[WAITLIST]} from {WAITLIST}, {deleted[ARCHIVE]} from {ARCHIVE}; remaining matches: {left}")
     return 0 if left == 0 else 1
 
 
-def _load_env() -> None:
+CONFIRM_WORD = "DELETE"
+
+
+def _confirm_from_tty(prompt: str) -> str:
+    """Read the confirmation from the terminal, not stdin (stdin may carry the email)."""
     try:
-        from dotenv import load_dotenv
-        load_dotenv(BACKEND / ".env", override=False)
-    except ImportError:
-        pass
+        # Unbuffered binary: a text "r+" open fails on a terminal (not seekable).
+        with open("/dev/tty", "rb+", buffering=0) as tty:
+            tty.write(prompt.encode())
+            return tty.readline().decode("utf-8", "replace")
+    except OSError:
+        print(f"no terminal for the confirmation; pass --confirm {CONFIRM_WORD}", file=sys.stderr)
+        return ""
+
+
+def _load_env_file(path: str) -> str | None:
+    """EMP-WL-074: load MONGO_URL / DB_NAME from an operator file (the dedicated user's URI).
+    Returns an error message, or None. The file must not be readable by group/others."""
+    p = Path(path)
+    try:
+        mode = p.stat().st_mode
+    except OSError:
+        return "--env-file: file not found"
+    if mode & 0o077:
+        return "--env-file: must be mode 0600 (chmod 600 FILE)"
+    from dotenv import dotenv_values
+    for key, value in dotenv_values(p).items():
+        if key in ("MONGO_URL", "DB_NAME") and value:
+            os.environ[key] = value
+    return None
 
 
 def _read_email(stdin=None) -> str:
@@ -153,7 +191,10 @@ def main(argv=None) -> int:
     e.add_argument("--fields", help=f"comma-separated columns (default {','.join(DEFAULT_FIELDS)})")
     e.add_argument("--apply", action="store_true", help="actually write the file")
     d = sub.add_parser("delete", help="remove one person by email (read from stdin)")
-    d.add_argument("--apply", action="store_true", help="actually delete")
+    d.add_argument("--apply", action="store_true", help="actually delete (asks you to type DELETE)")
+    d.add_argument("--confirm", help=f"non-interactive confirmation: must be exactly {CONFIRM_WORD}")
+    for sp in (e, d):
+        sp.add_argument("--env-file", help="0600 file with MONGO_URL/DB_NAME of the dedicated DB user")
     args = p.parse_args(argv)
 
     if args.cmd == "export":
@@ -163,9 +204,14 @@ def main(argv=None) -> int:
             print(str(ex), file=sys.stderr)
             return 2
 
-    _load_env()
+    if args.env_file:
+        err = _load_env_file(args.env_file)
+        if err:
+            print(err, file=sys.stderr)
+            return 2
     if not os.environ.get("MONGO_URL") or not os.environ.get("DB_NAME"):
-        print("MONGO_URL and DB_NAME must be set", file=sys.stderr)
+        print("MONGO_URL and DB_NAME must be set (environment or --env-file; backend/.env is never read)",
+              file=sys.stderr)
         return 2
     from pymongo import MongoClient
 
@@ -174,7 +220,8 @@ def main(argv=None) -> int:
         db = client[os.environ["DB_NAME"]]
         if args.cmd == "export":
             return run_export(db, args.out, fields, args.apply)
-        return run_delete(db, _read_email(), args.apply)
+        confirm = (lambda _prompt: args.confirm) if args.confirm is not None else None
+        return run_delete(db, _read_email(), args.apply, confirm=confirm)
     except Exception as ex:  # noqa: BLE001 - type only: driver messages can quote row data
         print(f"failed ({type(ex).__name__})", file=sys.stderr)
         return 1
