@@ -9,8 +9,8 @@ import os
 import time
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, EmailStr
-from typing import Optional
+from pydantic import BaseModel, EmailStr, Field
+from typing import Literal, Optional
 from db import get_db
 from models import _uuid, _now_iso
 from ai_receptionist import receptionist_reply
@@ -175,6 +175,10 @@ class WaitlistIn(BaseModel):
     business_name: Optional[str] = ""
     industry: Optional[str] = ""
     note: Optional[str] = ""
+    # Instant-quote estimator capture. One lead source per lead (Brann's rule): estimator leads
+    # are source "website form" with source_detail "estimator"; other landing signups unchanged.
+    source_detail: Optional[Literal["estimator"]] = None
+    estimated_tier: Optional[str] = Field(default=None, max_length=40, pattern=r"^[a-z0-9_]+$")
 
 
 @router.post("/waitlist")
@@ -188,7 +192,10 @@ async def waitlist(data: WaitlistIn, request: Request):
     doc = {
         "id": _uuid(), "email": data.email.lower(), "name": data.name or "",
         "business_name": data.business_name or "", "industry": data.industry or "",
-        "note": data.note or "", "source": "landing",
+        "note": data.note or "",
+        "source": "website form" if data.source_detail == "estimator" else "landing",
+        "source_detail": data.source_detail or "",
+        "estimated_tier": data.estimated_tier or "",
         "ip": request.client.host if request.client else "",
         "created_at": _now_iso(),
     }
