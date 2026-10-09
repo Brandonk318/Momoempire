@@ -141,6 +141,31 @@ describe("waitlist errors and success (waitlist-only build)", () => {
   });
 });
 
+describe("Join waitlist CTAs (EMP-WL-051)", () => {
+  beforeEach(() => { process.env.REACT_APP_WAITLIST_ONLY = "true"; });
+
+  test("each CTA is ONE interactive element: a styled link, no <button> inside an <a>", async () => {
+    await renderHome();
+    for (const id of ["header-cta-waitlist", "hero-cta-waitlist"]) {
+      const cta = q(`[data-testid="${id}"]`);
+      expect(cta.tagName).toBe("A");
+      expect(cta.getAttribute("href")).toBe("#waitlist");
+      expect(cta.querySelector("button, a, input, [tabindex]")).toBeNull();
+      expect(cta.closest("button")).toBeNull();
+      expect(cta.className).toMatch(/bg-white/); // still looks like the primary button
+      expect(cta.className).toMatch(/text-black/);
+      expect(cta.textContent).toBe("Join waitlist");
+    }
+    // Nowhere on the page: interactive content nested in a link or button.
+    expect(container.querySelectorAll("a button, a a, button a, button button")).toHaveLength(0);
+  });
+
+  test("axe finds no violations on the whole waitlist page (incl. nested-interactive)", async () => {
+    await renderHome();
+    expect(await axeViolations(container)).toEqual([]);
+  });
+});
+
 describe("contrast (WCAG AA 4.5:1 text, 3:1 input borders)", () => {
   test("contrast math matches known WCAG values", () => {
     const { contrast } = contrastScript;

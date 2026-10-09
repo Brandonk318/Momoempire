@@ -122,9 +122,10 @@ export default function Landing() {
             {!waitlistOnly && <LanguageSwitcher compact />}
             {/* EMP-WL-034: waitlist-only header CTA (existing "Join waitlist" label). */}
             {waitlistOnly && (
-              <a href="#waitlist" onClick={goToWaitlist} data-testid="header-cta-waitlist">
-                <Button className="bg-white text-black hover:bg-white/90">{t("landing.cta_join_waitlist")}<ArrowRight className="h-4 w-4 ml-1" /></Button>
-              </a>
+              // EMP-WL-051: one interactive element (a link styled as the button), not <button> in <a>.
+              <Button asChild className="bg-white text-black hover:bg-white/90">
+                <a href="#waitlist" onClick={goToWaitlist} data-testid="header-cta-waitlist">{t("landing.cta_join_waitlist")}<ArrowRight className="h-4 w-4 ml-1" /></a>
+              </Button>
             )}
             {!waitlistOnly && <Link to="/login"><Button variant="ghost" className="text-white hover:bg-white/10" data-testid="landing-login-btn">{t("common.login")}</Button></Link>}
             {!waitlistOnly && <Link to="/signup"><Button className="bg-white text-black hover:bg-white/90" data-testid="landing-signup-btn">{t("landing.cta_trial")}<ArrowRight className="h-4 w-4 ml-1" /></Button></Link>}
@@ -149,11 +150,11 @@ export default function Landing() {
             {/* EMP-WL-034 / WL-001: waitlist-only hero CTA is the primary button (existing label). */}
             {waitlistOnly && (
               <div className="mt-8">
-                <a href="#waitlist" onClick={goToWaitlist} data-testid="hero-cta-waitlist">
-                  <Button className="h-12 px-6 bg-white text-black hover:bg-white/90 text-base">
+                <Button asChild className="h-12 px-6 bg-white text-black hover:bg-white/90 text-base">
+                  <a href="#waitlist" onClick={goToWaitlist} data-testid="hero-cta-waitlist">
                     {t("landing.cta_join_waitlist")}<ArrowRight className="h-4 w-4 ml-1.5" />
-                  </Button>
-                </a>
+                  </a>
+                </Button>
               </div>
             )}
             {!waitlistOnly && <div className="mt-8 flex flex-wrap gap-3 items-center">
