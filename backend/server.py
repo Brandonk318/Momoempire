@@ -190,8 +190,10 @@ async def shutdown():
 
 # EMP-WL-029: waitlist POST must be JSON (415) and, with a CORS_ORIGINS allow-list, from an
 # allowed Origin (403). Blocks cross-site text/plain signups. Keep when PR #11 merges.
-from waitlist_guard import WaitlistPostGuard  # noqa: E402
-app.add_middleware(WaitlistPostGuard)
+# EMP-WL-036: installed INSIDE CORSMiddleware so its 415/403 replies get CORS headers for allowed
+# origins (and none for disallowed ones). Don't switch this to app.add_middleware().
+from waitlist_guard import install_waitlist_guard  # noqa: E402
+install_waitlist_guard(app)
 
 # EMP-WL-002: WAITLIST_ONLY=true swaps in a minimal app (health + waitlist only; no seeding).
 from waitlist_mode import waitlist_only_enabled, build_waitlist_app  # noqa: E402

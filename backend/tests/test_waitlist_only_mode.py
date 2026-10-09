@@ -99,6 +99,7 @@ from fastapi.testclient import TestClient
 from fastapi.routing import APIRoute
 from starlette.routing import Mount
 out = {"startup_handlers": len(server.app.router.on_startup)}
+out["middleware"] = [m.cls.__name__ for m in server.app.user_middleware]
 routes = []
 for r in server.app.routes:
     if isinstance(r, APIRoute):
@@ -117,6 +118,7 @@ with TestClient(server.app, raise_server_exceptions=False) as c:   # runs startu
     r = c.post("/api/public/waitlist", json={"email": "wl@example.com"})
     out["waitlist"] = [r.status_code, len(FAKE.waitlist.docs)]
     g = {}
+    cors_h = {}
     body = '{"email": "xsite@example.com"}'
     for name, hdrs in {
         "text_plain": {"Content-Type": "text/plain"},
@@ -127,11 +129,17 @@ with TestClient(server.app, raise_server_exceptions=False) as c:   # runs startu
         "json_good_origin": {"Content-Type": "application/json", "Origin": "https://good.example"},
         "json_evil_origin": {"Content-Type": "application/json", "Origin": "https://evil.example"},
         "json_null_origin": {"Content-Type": "application/json", "Origin": "null"},
+        # EMP-WL-036: guard errors seen by a browser (Origin set)
+        "text_plain_good_origin": {"Content-Type": "text/plain", "Origin": "https://good.example"},
+        "text_plain_evil_origin": {"Content-Type": "text/plain", "Origin": "https://evil.example"},
     }.items():
         before = len(FAKE.waitlist.docs)
         rr = c.post("/api/public/waitlist", content=body.replace("xsite", name.replace("_", "")), headers=hdrs)
         g[name] = [rr.status_code, len(FAKE.waitlist.docs) - before]
+        cors_h[name] = [rr.headers.get("access-control-allow-origin"), rr.headers.get("access-control-allow-credentials"),
+                        rr.headers.get("content-type"), rr.text]
     out["guard"] = g
+    out["guard_cors"] = cors_h
     res = {}
     for spec in paths:
         method, path = spec.split(" ", 1)
@@ -160,7 +168,7 @@ def _concrete(spec):
     return method + " " + re.sub(r"\{[^}]+\}", "x", path)
 
 
-def _run(waitlist_only: bool, paths, cors_origins: str | None = None):
+def _run(waitlist_only: bool, paths, cors_origins: str | None = None, app_env: str | None = None):
     env = {k: v for k, v in os.environ.items()
            if k not in ("WAITLIST_ONLY", "CORS_ORIGINS", "TURNSTILE_ENABLED", "APP_ENV")}
     env.update({"JWT_SECRET": "x", "MONGO_URL": "mongodb://localhost:1", "DB_NAME": "x",
@@ -169,6 +177,8 @@ def _run(waitlist_only: bool, paths, cors_origins: str | None = None):
         env["WAITLIST_ONLY"] = "true"
     if cors_origins is not None:
         env["CORS_ORIGINS"] = cors_origins
+    if app_env is not None:
+        env["APP_ENV"] = app_env
     p = subprocess.run([sys.executable, "-c", _PROBE], cwd=BACKEND, env=env,
                        capture_output=True, text=True, timeout=180)
     assert p.returncode == 0, p.stderr[-3000:]
@@ -297,6 +307,94 @@ def test_guard_allowed_origins_parsing(monkeypatch):
 
 
 def test_guard_registered_in_server_and_waitlist_app():
+    # EMP-WL-036: registered with install_waitlist_guard (inside CORS), not add_middleware.
     src = (BACKEND / "server.py").read_text()
-    assert "app.add_middleware(WaitlistPostGuard)" in src
-    assert "WaitlistPostGuard" in (BACKEND / "waitlist_mode.py").read_text()
+    assert "install_waitlist_guard(app)" in src and "app.add_middleware(WaitlistPostGuard)" not in src
+    assert "install_waitlist_guard(app)" in (BACKEND / "waitlist_mode.py").read_text()
+
+
+# ---- EMP-WL-036: guard 415/403 replies carry CORS headers for allowed origins only ----
+# These hold on #13 alone (inline CORS config in server.py) and with PR #10 (server.py uses
+# deploy_security.cors_options); the only difference is production with CORS_ORIGINS unset.
+PR10 = "from deploy_security import cors_options" in (BACKEND / "server.py").read_text()
+
+
+@pytest.fixture(scope="module")
+def full_upper():
+    return _run(False, [], cors_origins="https://Good.Example/")
+
+
+@pytest.fixture(scope="module")
+def full_prod_unset():
+    return _run(False, [], app_env="production")
+
+
+@pytest.fixture(scope="module")
+def wl_prod_unset():
+    return _run(True, [], app_env="production")
+
+
+@pytest.mark.parametrize("run", ["full", "wl", "full_allowlist", "wl_allowlist", "full_prod_unset", "wl_prod_unset"])
+def test_guard_runs_inside_cors(request, run):
+    mw = request.getfixturevalue(run)["middleware"]
+    assert "CORSMiddleware" in mw and "WaitlistPostGuard" in mw
+    assert mw.index("WaitlistPostGuard") > mw.index("CORSMiddleware")  # later in the list = inner
+
+
+@pytest.mark.parametrize("run", ["full_allowlist", "wl_allowlist"])
+def test_guard_errors_readable_by_allowed_origin_only(request, run):
+    r = request.getfixturevalue(run)
+    g, h = r["guard"], r["guard_cors"]
+    # Allowed origin, non-JSON: 415 WITH the CORS headers, so the page can read the reason.
+    assert g["text_plain_good_origin"] == [415, 0]
+    acao, acac, ctype, text = h["text_plain_good_origin"]
+    assert acao == "https://good.example" and acac == "true"
+    assert ctype == "application/json" and "application/json" in text
+    # Disallowed origin: 403 (JSON) / 415 (non-JSON) and NO Access-Control-Allow-Origin.
+    assert g["json_evil_origin"] == [403, 0] and h["json_evil_origin"][0] is None
+    assert g["text_plain_evil_origin"] == [415, 0] and h["text_plain_evil_origin"][0] is None
+    assert g["json_null_origin"] == [403, 0] and h["json_null_origin"][0] is None
+    # Success for the allowed origin still has it; no Origin header => no CORS header.
+    assert h["json_good_origin"][0] == "https://good.example"
+    assert h["text_plain"][0] is None
+
+
+@pytest.mark.parametrize("run", ["full", "wl"])
+def test_dev_without_allowlist_guard_errors_have_cors_headers(request, run):
+    # Development, CORS_ORIGINS unset: any origin may read (#13 alone: echoed origin; with #10: "*").
+    h = request.getfixturevalue(run)["guard_cors"]
+    assert h["text_plain_good_origin"][0] in ("https://good.example", "*")
+    assert h["text_plain_evil_origin"][0] in ("https://evil.example", "*")
+
+
+@pytest.mark.parametrize("run", ["full_prod_unset", "wl_prod_unset"])
+def test_production_without_cors_origins_starts(request, run):
+    # The server STARTS either way. Without #10 the inline config still lets any origin read; with
+    # #10 it fails closed: no Access-Control-Allow-Origin at all, so browsers can't read any reply.
+    r = request.getfixturevalue(run)
+    assert r["health"][0] == 200
+    acao = r["guard_cors"]["text_plain_good_origin"][0]
+    if PR10:
+        assert acao is None
+    else:
+        assert acao == "https://good.example"
+    assert r["guard"]["json_evil_origin"][0] == 200  # no allow-list => the guard doesn't check Origin
+
+
+def test_allowlist_entry_case_and_trailing_slash_ignored(full_upper):
+    g = full_upper["guard"]
+    assert g["json_good_origin"] == [200, 1]  # CORS_ORIGINS="https://Good.Example/"
+    assert g["json_evil_origin"] == [403, 0]
+
+
+# ---- EMP-WL-035: deploy doc states the real behaviour ----
+def test_deploy_doc_fixes():
+    doc = (BACKEND.parent / "docs" / "deploy" / "waitlist-only.md").read_text()
+    assert "startup fails" not in doc and "The server **starts**" in doc
+    assert "Deploy only after PR #11 is merged" in doc
+    assert "`FORWARDED_ALLOW_IPS` | the proxy's IP" in doc and "**Required** (needs #11)" in doc
+    for value in ("172.30.0.1", "127.0.0.1", "set_real_ip_from"):
+        assert value in doc
+    assert "Same-origin setups still need it" in doc
+    ex = (BACKEND / ".env.example").read_text()
+    assert "enforces this at startup" not in ex and "still starts but fails closed" in ex
