@@ -54,6 +54,7 @@ none of them needs hand resolution (each merges cleanly onto the full stack):
 | #34 | #28 | #28 | WL-093 waitlist bundle has only waitlist strings, WL-094 axe-core devDependency |
 | #35 | #30 | #30 | WL-095 privacy TODO slot for Google Fonts and Cloudflare |
 | #36 | #24 | #24 | WL-092 deploy doc fixes (Turnstile switches, source maps, site metadata, DB-down/index steps) |
+| #37 | Cloudflare-2 | any time (checked clean after #26 on the full stack: 346 backend) | Twilio webhook signatures, not waitlist (EMP-FIX-034) |
 
 Full order as checked locally: #10, #8, #25, #11, #12, #29, #14, #18, #27, #33, #15, #13, #22,
 #30, #35, #17, #24, #36, #16, #19, #23, #28, #34, #20, #31, #21, #32, #26.
