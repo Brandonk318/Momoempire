@@ -27,6 +27,11 @@ def get_db():
     return _db
 
 
+# Marks the app's own get_db. Code that swaps in another DB (tests, the waitlist-only app wiring)
+# replaces the function, so the marker is gone and that DB is used as is (EMP-WL-061).
+get_db.app_default = True
+
+
 def waitlist_db_timeout_ms() -> int:
     try:
         value = int(os.environ.get("WAITLIST_DB_TIMEOUT_MS") or WAITLIST_DB_TIMEOUT_MS_DEFAULT)

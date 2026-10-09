@@ -94,6 +94,17 @@ def test_patched_get_db_is_still_used(fresh):
     sentinel = object()
     fresh.setattr(mk, "get_db", lambda: sentinel)
     assert mk._signup_db() is sentinel
+    # Also when db.get_db itself was replaced before marketing was imported (as
+    # test_waitlist_only_mode.py does): both names point at the same replacement.
+    fake = lambda: sentinel  # noqa: E731
+    fresh.setattr(dbmod, "get_db", fake)
+    fresh.setattr(mk, "get_db", fake)
+    assert mk._signup_db() is sentinel
+
+
+def test_unpatched_uses_the_short_timeout_client(fresh):
+    fresh.setenv("MONGO_URL", "mongodb://127.0.0.1:9")
+    assert mk._signup_db().client is dbmod.get_waitlist_db().client
 
 
 @pytest.mark.skipif(not MONGO_URL, reason="set WAITLIST_TEST_MONGO_URL to a throwaway MongoDB")

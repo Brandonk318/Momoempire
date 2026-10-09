@@ -539,7 +539,7 @@ async def _send_waitlist_confirmation(email: str) -> None:
 def _signup_db():
     """EMP-WL-061: the signup path uses the short-timeout client (db.get_waitlist_db). If get_db
     has been swapped (tests, or another app wiring in its own DB), that one is used as is."""
-    if get_db is _db_module.get_db:
+    if getattr(get_db, "app_default", False):
         return _db_module.get_waitlist_db()
     return get_db()
 
