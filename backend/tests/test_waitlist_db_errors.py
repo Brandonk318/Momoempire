@@ -279,9 +279,32 @@ def test_legacy_suites_default_to_a_dead_local_url():
             continue
         src = f.read_text()
         assert "emergentagent.com" not in src, f.name
-    for name in ("backend_test.py", "test_phase2.py", "test_phase4.py", "test_phase6.py",
-                 "test_phase10_new_features.py", "test_iteration10_cloudflare_prep.py"):
-        assert '"http://127.0.0.1:9"' in (BACKEND / "tests" / name).read_text(), name
+    for name in LEGACY_LIVE_SUITES:
+        src = (BACKEND / "tests" / name).read_text()
+        # Default is a dead local port, the trailing-slash strip is code (not inside the comment),
+        # and the URL never comes from a deployment's frontend/.env.
+        assert '"http://127.0.0.1:9").rstrip("/")  # WL-044' in src, name
+        assert "/app/frontend/.env" not in src, name
+
+
+LEGACY_LIVE_SUITES = ("backend_test.py", "test_phase2.py", "test_phase4.py", "test_phase6.py",
+                      "test_phase10_new_features.py", "test_iteration10_cloudflare_prep.py",
+                      "test_phase5.py", "test_phase7.py", "test_phase8.py", "test_phase9.py",
+                      "test_call_to_payment.py")
+
+
+def test_legacy_suites_strip_the_trailing_slash(monkeypatch):
+    """The six suites #18 edited had .rstrip("/") inside the comment, so a URL with a trailing
+    slash produced '//api'. Evaluate each BASE line for real."""
+    import ast
+    monkeypatch.setenv("REACT_APP_BACKEND_URL", "http://127.0.0.1:9/")
+    for name in LEGACY_LIVE_SUITES:
+        tree = ast.parse((BACKEND / "tests" / name).read_text())
+        assigns = [n for n in tree.body if isinstance(n, ast.Assign)
+                   and getattr(n.targets[0], "id", "") in ("BASE", "BASE_URL")]
+        assert assigns, name
+        value = eval(compile(ast.Expression(assigns[0].value), name, "eval"), {"os": os})
+        assert value == "http://127.0.0.1:9", (name, value)
 
 
 # ---------------- real MongoDB ----------------

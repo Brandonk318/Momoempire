@@ -18,6 +18,7 @@ from fastapi.exceptions import RequestValidationError
 from pymongo.errors import DuplicateKeyError
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, ValidationError, field_validator
 from typing import Literal, Optional
+import db as _db_module
 from db import get_db
 from models import _uuid, _now_iso
 from ai_receptionist import receptionist_reply
@@ -535,6 +536,14 @@ async def _send_waitlist_confirmation(email: str) -> None:
         log.exception("waitlist: confirmation email failed")
 
 
+def _signup_db():
+    """EMP-WL-061: the signup path uses the short-timeout client (db.get_waitlist_db). If get_db
+    has been swapped (tests, or another app wiring in its own DB), that one is used as is."""
+    if get_db is _db_module.get_db:
+        return _db_module.get_waitlist_db()
+    return get_db()
+
+
 @router.post("/waitlist")
 async def waitlist(request: Request, background: BackgroundTasks):
     ip = client_ip(request)
@@ -562,7 +571,7 @@ async def waitlist(request: Request, background: BackgroundTasks):
         if not await verify_turnstile(token if isinstance(token, str) else "", ip):
             raise HTTPException(400, "Verification failed. Please refresh the page and try again.")
 
-    db = get_db()
+    db = _signup_db()
     try:
         await _ensure_waitlist_index(db)
     except Exception as e:  # DB unreachable: say so instead of pretending (EMP-WL-041)
