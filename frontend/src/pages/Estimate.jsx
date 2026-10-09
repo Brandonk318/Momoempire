@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import "@/i18n/estimator";
 import { api, errMessage } from "@/lib/api";
+import { waitlistErrorText } from "@/lib/waitlistErrors";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,7 +98,8 @@ export default function Estimate() {
       });
       setSent(true);
     } catch (err) {
-      toast.error(errMessage(err));
+      // EMP-WL-064 / WL-071: translated 503 text, plain wording for validation errors.
+      toast.error(waitlistErrorText(err, t, errMessage));
     } finally {
       setSending(false);
     }
