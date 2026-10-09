@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, ValidationError, field_validator
-from typing import Optional
+from typing import Literal, Optional
 from db import get_db
 from models import _uuid, _now_iso
 from ai_receptionist import receptionist_reply
@@ -226,6 +226,10 @@ class WaitlistIn(BaseModel):
     business_name: Optional[str] = Field(default="", max_length=120)
     industry: Optional[str] = Field(default="", max_length=60)
     note: Optional[str] = Field(default="", max_length=2000)
+    # Instant-quote estimator (EMP-FEAT-001). One lead source per lead (Brann's rule): estimator
+    # leads are source "website form" with source_detail "estimator"; other signups unchanged.
+    source_detail: Optional[Literal["estimator"]] = None
+    estimated_tier: Optional[str] = Field(default=None, max_length=40, pattern=r"^[a-z0-9_]+$")
 
     @field_validator("email", mode="before")
     @classmethod
@@ -445,7 +449,11 @@ async def waitlist(request: Request, background: BackgroundTasks):
     doc = {
         "id": _uuid(), "email": email, "name": data.name or "",
         "business_name": data.business_name or "", "industry": data.industry or "",
-        "note": data.note or "", "source": "landing", "ip": ip, "created_at": now,
+        "note": data.note or "",
+        "source": "website form" if data.source_detail == "estimator" else "landing",
+        "source_detail": data.source_detail or "",
+        "estimated_tier": data.estimated_tier or "",
+        "ip": ip, "created_at": now,
     }
     inserted = False
     try:
@@ -453,6 +461,19 @@ async def waitlist(request: Request, background: BackgroundTasks):
         inserted = getattr(res, "upserted_id", None) is not None
     except Exception:  # duplicate-key race on the unique index = already on the list
         log.info("waitlist: concurrent duplicate signup ignored")
+
+    # Repeat estimator signup (EMP-W-CF-029): silently refresh the latest estimate on the existing
+    # record. Only estimator fields change; name/note/source/created_at and the first record stay.
+    # Same response, no email resend, so the reply still doesn't reveal whether the email existed.
+    if not inserted and data.source_detail == "estimator" and data.estimated_tier:
+        try:
+            await db.waitlist.update_one(
+                {"email": email},
+                {"$set": {"estimated_tier": data.estimated_tier, "estimator_detail": data.note or "",
+                          "estimator_updated_at": now}},
+            )
+        except Exception:
+            log.warning("waitlist: could not refresh estimate on existing entry", exc_info=True)
 
     # Confirmation email: at most once per address, only for the request that created the entry
     # (duplicates and rows from before this change never get another email). An atomic claim
