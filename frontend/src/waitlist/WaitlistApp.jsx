@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 // Relative imports so the Jest router test can resolve them (no @/ alias in the Jest config).
 import { Toaster } from "../components/ui/sonner";
+import CanonicalLink from "../components/CanonicalLink";
 import Landing from "../pages/Landing";
 import { Privacy, Terms } from "../pages/Legal";
 
@@ -27,6 +28,7 @@ export default function WaitlistApp() {
   return (
     <>
       <BrowserRouter>
+        <CanonicalLink />
         <WaitlistRoutes />
       </BrowserRouter>
       <Toaster position="top-right" richColors />
