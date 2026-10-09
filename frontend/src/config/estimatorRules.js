@@ -34,6 +34,18 @@ export const ESTIMATOR_RULES = {
     { id: "sms_5", max: null },
   ],
 
+  // PLACEHOLDER: AI-answered minutes per month, matched against plan.limits.ai_minutes.
+  // Upper bounds mirror today's seeded ai_minutes limits (backend/routers/plans.py) so each band
+  // lands on one plan; Brann to confirm. "ai_unsure" has no max: not counted in matching.
+  aiMinutesBands: [
+    { id: "ai_1", max: 100 },
+    { id: "ai_2", max: 300 },
+    { id: "ai_3", max: 650 },
+    { id: "ai_4", max: 1400 },
+    { id: "ai_5", max: null },
+  ],
+  aiMinutesUnsureId: "ai_unsure",
+
   // Input caps for the number fields (not tier thresholds).
   maxLocationsInput: 999,
   maxUsersInput: 9999,

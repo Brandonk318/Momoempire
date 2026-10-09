@@ -1,12 +1,33 @@
 // Pure plan matching for the instant-quote estimator. No I/O; unit-tested in estimator.test.js.
 import { ESTIMATOR_RULES } from "../config/estimatorRules";
 
-const METRICS = ["calls", "sms", "locations", "users"];
+const METRICS = ["calls", "sms", "ai_minutes", "locations", "users"];
 
 function bandMax(bands, id) {
   const b = (bands || []).find((x) => x.id === id);
   if (!b) return undefined;
   return b.max === null ? Infinity : b.max;
+}
+
+const WHOLE_NUMBER = /^\d+$/;
+
+/**
+ * Validate the free-number answers. Zero, negative, blank, decimal or non-numeric values are
+ * rejected with an error code instead of silently counting as "not answered" (which used to
+ * fall through to Starter).
+ * @returns {{locations?: "required"|"invalid"|"tooLarge", users?: "required"|"invalid"|"tooLarge"}}
+ */
+export function validateAnswers(answers = {}, rules = ESTIMATOR_RULES) {
+  const errors = {};
+  const caps = { locations: rules.maxLocationsInput, users: rules.maxUsersInput };
+  for (const field of ["locations", "users"]) {
+    const raw = answers[field];
+    const str = raw === undefined || raw === null ? "" : String(raw).trim();
+    if (str === "") errors[field] = "required";
+    else if (!WHOLE_NUMBER.test(str) || Number(str) < 1) errors[field] = "invalid";
+    else if (Number.isFinite(caps[field]) && Number(str) > caps[field]) errors[field] = "tooLarge";
+  }
+  return errors;
 }
 
 /** Turn form answers into required capacity per metric (undefined = not asked/answered). */
@@ -18,6 +39,7 @@ export function requirementsFrom(answers = {}, rules = ESTIMATOR_RULES) {
   return {
     calls: bandMax(rules.callBands, answers.callsBand),
     sms: bandMax(rules.smsBands, answers.smsBand),
+    ai_minutes: bandMax(rules.aiMinutesBands, answers.aiMinutesBand),
     locations: toInt(answers.locations),
     users: toInt(answers.users),
   };
@@ -34,9 +56,14 @@ export function standardPlans(plans, rules = ESTIMATOR_RULES) {
 
 /**
  * Match answers to a plan.
- * @returns {{status: "ok"|"custom"|"unavailable", plan: object|null, exceeded: string[], warnings: string[]}}
+ * @returns {{status: "ok"|"custom"|"unavailable"|"invalid", plan: object|null, exceeded: string[],
+ *   warnings: string[], errors?: object}}
  */
 export function matchPlan(answers, plans, rules = ESTIMATOR_RULES) {
+  const errors = validateAnswers(answers, rules);
+  if (Object.keys(errors).length > 0) {
+    return { status: "invalid", plan: null, exceeded: [], warnings: [], errors };
+  }
   const warnings = [];
   const tiers = standardPlans(plans, rules);
   if (tiers.length === 0) {
