@@ -6,8 +6,9 @@ gets merged, and when.
 
 Checked on 2026-10-08 by merging the whole stack locally in this order (not pushed, not
 deployed). Only four merges conflicted (#18, #13, #16, #19), and the five resolutions in
-section 3 cover them. With those applied, the backend unit suites passed (293, against a
-throwaway local MongoDB) and the frontend suites passed (154). The legacy `test_phase*.py`,
+section 3 cover them. With those applied (and #26–#32 added as listed in section 1), the
+backend unit suites passed (320, against a throwaway local MongoDB), the frontend suites passed
+(185), and both builds succeeded. The legacy `test_phase*.py`,
 `backend_test.py`, `test_call_to_payment.py` and `test_iteration10_*.py` files need a live
 server, so they were not part of that run.
 
@@ -36,8 +37,21 @@ order relative to each other:
 **#21** (waitlist data ops: script + docs) can be merged any time. It touches no files the
 others touch.
 
-PRs opened after #25 for the waitlist follow-ups go directly after the PR they are stacked
-on. Each PR body says what it is stacked on.
+Follow-up PRs opened after #25. Each one merges right after the PR it is stacked on, and
+none of them needs hand resolution (each merges cleanly onto the full stack):
+
+| PR | Stacked on | Merge right after | What |
+|---|---|---|---|
+| #26 | Cloudflare-2 | any time | this guide (docs only) |
+| #27 | #18 | #18 | WL-061 fail fast on a down DB, WL-044 legacy test URLs |
+| #28 | #23 | #23 | WL-064/071 landing form error text |
+| #29 | #12 | #12 | WL-071/064 estimator error text (same `waitlistErrors.js` as #28, byte-identical) |
+| #30 | #22 | #22 | WL-082 fixed "Last updated" date |
+| #31 | #20 | #20 | WL-072 canonical + favicon.ico, WL-073 no source maps in the waitlist build |
+| #32 | #21 | #21 | WL-074/075 data-ops credentials + typed DELETE confirmation |
+
+Full order as checked locally: #10, #8, #25, #11, #12, #29, #14, #18, #27, #15, #13, #22,
+#30, #17, #24, #16, #19, #23, #28, #20, #31, #21, #32, #26.
 
 ## 2. PRs outside the waitlist stack (#1–#7, #9)
 
