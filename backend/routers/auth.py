@@ -25,8 +25,9 @@ async def _check_lockout(db, identifier: str):
     if not doc:
         return
     if doc.get("count", 0) >= LOCKOUT_LIMIT:
-        until = doc.get("locked_until")
-        if until and datetime.fromisoformat(until) > datetime.now(timezone.utc):
+        from timeutil import as_utc
+        until = as_utc(doc.get("locked_until"))  # stored as an ISO string; tolerant of a BSON date too
+        if until and until > datetime.now(timezone.utc):
             raise HTTPException(429, "Too many failed attempts. Try again later.")
 
 
@@ -236,10 +237,10 @@ async def reset_password(data: ResetIn):
     rec = await db.password_reset_tokens.find_one({"token": data.token})
     if not rec or rec.get("used"):
         raise HTTPException(400, "Invalid or used token")
-    exp = rec["expires_at"]
-    if isinstance(exp, str):
-        exp = datetime.fromisoformat(exp)
-    if exp < datetime.now(timezone.utc):
+    # EMP-W-CF-026: MongoDB returns expires_at as a NAIVE datetime (stored aware UTC); comparing it
+    # with an aware "now" raised TypeError -> 500. Normalize (naive = UTC); missing/garbage = expired.
+    from timeutil import is_expired
+    if is_expired(rec.get("expires_at")):
         raise HTTPException(400, "Token expired")
     target = await db.users.find_one({"id": rec["user_id"]}) or {}
     patch = {"password_hash": hash_password(data.new_password)}

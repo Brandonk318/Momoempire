@@ -87,12 +87,8 @@ async def _load_current_user(request: Request) -> dict:
     if session_token:
         sess = await db.user_sessions.find_one({"session_token": session_token})
         if sess:
-            exp = sess.get("expires_at")
-            if isinstance(exp, str):
-                try: exp = datetime.fromisoformat(exp)
-                except Exception: exp = None
-            if exp and exp.tzinfo is None:
-                exp = exp.replace(tzinfo=timezone.utc)
+            from timeutil import as_utc  # EMP-W-CF-026: one normalizer for every stored expiry
+            exp = as_utc(sess.get("expires_at"))
             if exp and exp >= datetime.now(timezone.utc):
                 user = await db.users.find_one({"id": sess["user_id"]}, {"_id": 0, "password_hash": 0})
                 if user:

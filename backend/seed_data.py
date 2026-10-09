@@ -239,6 +239,16 @@ async def seed_admin():
                     "(and optionally ADMIN_PASSWORD) and restart to create the platform admin.")
         return
 
+    # EMP-W-CF-027: ADMIN_EMAIL already belongs to a non-admin user. Inserting would hit the unique
+    # email index and abort ALL seeding. Never promote or modify that user automatically (anyone who
+    # registered with that address would become platform admin): warn, skip, carry on seeding.
+    clash = await db.users.find_one({"email": email}, {"_id": 0, "id": 1, "role": 1})
+    if clash:
+        log.warning("ADMIN_EMAIL matches an existing %s user (id=%s); NOT seeding a platform admin and NOT "
+                    "changing that user. Set ADMIN_EMAIL to an unused address and restart, or promote the "
+                    "account by hand after verifying who owns it.", clash.get("role") or "non-admin", clash.get("id"))
+        return
+
     env_pwd = os.environ.get("ADMIN_PASSWORD") or ""
     problems = password_problems(env_pwd) if env_pwd else ["not set"]
     unusable = False
@@ -254,6 +264,15 @@ async def seed_admin():
         unusable = True
 
     from models import _uuid
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await _insert_admin(db, _uuid, email, pwd_hash, unusable)
+    except DuplicateKeyError:
+        # Same clash, created between the check above and the insert (e.g. two instances starting).
+        log.warning("ADMIN_EMAIL was registered concurrently; NOT seeding a platform admin (EMP-W-CF-027).")
+
+
+async def _insert_admin(db, _uuid, email, pwd_hash, unusable):
     await db.users.insert_one({
         "id": _uuid(),
         "email": email,
@@ -350,7 +369,11 @@ async def ensure_indexes():
 
 async def run_all_seeds():
     await ensure_indexes()
-    await seed_admin()
+    try:
+        await seed_admin()
+    except Exception:  # EMP-W-CF-027: an admin-seed problem must not stop industries/countries/flags/plans
+        import logging
+        logging.getLogger("seed").exception("platform admin seed failed; continuing with the other seeds")
     await seed_industries()
     await seed_countries()
     await seed_flags()
