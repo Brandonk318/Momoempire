@@ -8,6 +8,7 @@
 import asyncio
 import json
 import logging
+import re
 import os
 import time
 from datetime import datetime, timezone
@@ -218,6 +219,24 @@ TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverif
 WAITLIST_RESPONSE = {"ok": True, "status": "received"}  # identical for new and duplicate signups
 
 
+_TAG_RE = re.compile(r"</?[A-Za-z!][^>]*>")  # real tags/comments only: "a < b > c" keeps its text
+_CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def sanitize_text(value):
+    """EMP-W-CF-031: plain text only for stored free-text fields.
+
+    Removes HTML tags (e.g. "<script>x</script>" -> "x"), any stray "<" or ">", and control
+    characters except newline/tab. Anything that later renders waitlist rows (admin page, CSV/
+    email export) must STILL escape on output; this is defense in depth, not a substitute.
+    """
+    if not isinstance(value, str):
+        return value
+    value = _TAG_RE.sub("", value)
+    value = value.replace("<", "").replace(">", "")
+    return _CTRL_RE.sub("", value).strip()
+
+
 class WaitlistIn(BaseModel):
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
@@ -230,6 +249,11 @@ class WaitlistIn(BaseModel):
     # leads are source "website form" with source_detail "estimator"; other signups unchanged.
     source_detail: Optional[Literal["estimator"]] = None
     estimated_tier: Optional[str] = Field(default=None, max_length=40, pattern=r"^[a-z0-9_]+$")
+
+    @field_validator("name", "business_name", "industry", "note", mode="after")
+    @classmethod
+    def _plain_text(cls, v):
+        return sanitize_text(v)
 
     @field_validator("email", mode="before")
     @classmethod
@@ -462,18 +486,20 @@ async def waitlist(request: Request, background: BackgroundTasks):
     except Exception:  # duplicate-key race on the unique index = already on the list
         log.info("waitlist: concurrent duplicate signup ignored")
 
-    # Repeat estimator signup (EMP-W-CF-029): silently refresh the latest estimate on the existing
-    # record. Only estimator fields change; name/note/source/created_at and the first record stay.
-    # Same response, no email resend, so the reply still doesn't reveal whether the email existed.
-    if not inserted and data.source_detail == "estimator" and data.estimated_tier:
-        try:
-            await db.waitlist.update_one(
-                {"email": email},
-                {"$set": {"estimated_tier": data.estimated_tier, "estimator_detail": data.note or "",
-                          "estimator_updated_at": now}},
-            )
-        except Exception:
-            log.warning("waitlist: could not refresh estimate on existing entry", exc_info=True)
+    # Repeat signup (EMP-W-CF-029 / CF-031): never overwrite what the first signup stored, since
+    # anyone who knows an address could otherwise change that person's row. Only fill fields that
+    # are still blank (estimated_tier, source_detail, note), each with an atomic "still blank"
+    # filter. Same response, no email resend: the reply doesn't reveal whether the email existed.
+    if not inserted:
+        fills = {"estimated_tier": data.estimated_tier or "", "source_detail": data.source_detail or "",
+                 "note": data.note or ""}
+        for field, value in fills.items():
+            if not value:
+                continue
+            try:
+                await db.waitlist.update_one({"email": email, field: {"$in": ["", None]}}, {"$set": {field: value}})
+            except Exception:
+                log.warning("waitlist: could not fill blank %s on existing entry", field, exc_info=True)
 
     # Confirmation email: at most once per address, only for the request that created the entry
     # (duplicates and rows from before this change never get another email). An atomic claim

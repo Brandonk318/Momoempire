@@ -317,3 +317,36 @@ def test_docs_explain_gateway_match_and_one_worker():
 def test_env_example_names_only_for_new_vars():
     ex = (REPO / "backend" / ".env.example").read_text()
     assert [l for l in ex.splitlines() if l.startswith("WEB_CONCURRENCY=")] == ["WEB_CONCURRENCY="]
+
+
+@needs_mongo
+def test_real_mongo_repeat_signup_fills_blanks_only(monkeypatch):
+    """EMP-W-CF-031 on real MongoDB: {"$in": ["", None]} matches blank AND missing fields."""
+    import httpx
+    sent = []
+
+    async def fake_send(email):
+        sent.append(email)
+
+    async def scenario(db):
+        await db.waitlist.insert_one({"email": "legacy@example.com", "name": "Legacy"})  # no tier/note fields
+        monkeypatch.setattr(mk, "get_db", lambda: db)
+        monkeypatch.setattr(mk, "_send_waitlist_confirmation", fake_send)
+        monkeypatch.setattr(mk, "_WAITLIST_INDEX_READY", False)
+        monkeypatch.delenv("TURNSTILE_ENABLED", raising=False)
+        for lim in (mk._WAITLIST_IP_MINUTE, mk._WAITLIST_IP_HOUR):
+            lim.reset()
+        app = FastAPI()
+        app.include_router(mk.router, prefix="/api")
+        est = {"source_detail": "estimator", "estimated_tier": "growth", "note": "<script>x</script>first"}
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+            r1 = await c.post(WL, json={"email": "legacy@example.com", **est})
+            r2 = await c.post(WL, json={"email": "legacy@example.com", "source_detail": "estimator",
+                                        "estimated_tier": "high_volume", "note": "second", "name": "Other"})
+        return r1.status_code, r2.status_code, await db.waitlist.find_one({}, {"_id": 0})
+
+    c1, c2, doc = asyncio.run(_real_db_run(f"wlfu_fill_{uuid.uuid4().hex[:8]}", scenario))
+    assert c1 == c2 == 200
+    assert doc["name"] == "Legacy"
+    assert (doc["estimated_tier"], doc["source_detail"], doc["note"]) == ("growth", "estimator", "xfirst")
+    assert sent == []

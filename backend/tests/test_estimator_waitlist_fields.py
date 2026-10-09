@@ -31,6 +31,9 @@ def _match(doc, q):
         if isinstance(v, dict) and "$exists" in v:
             if (k in doc) != bool(v["$exists"]):
                 return False
+        elif isinstance(v, dict) and "$in" in v:  # Mongo: None in $in also matches a missing field
+            if doc.get(k) not in v["$in"]:
+                return False
         elif doc.get(k) != v:
             return False
     return True
@@ -167,8 +170,9 @@ def test_client_cannot_set_source(client):
     assert db.waitlist.docs[0]["source"] == "landing"
 
 
-def test_repeat_estimator_signup_updates_estimate_silently(client):
-    """EMP-W-CF-029 decision: same response, no resend, latest estimate kept on the first record."""
+def test_repeat_signup_never_overwrites_existing_values(client):
+    """EMP-W-CF-031 (replaces #12's 'refresh the estimate' rule): same response, no resend, and the
+    first signup's values stay. Someone who knows the address can't change that person's row."""
     c, db, sent = client
     r1 = c.post(WL, json=_est())
     r2 = c.post(WL, json=_est(email="A@Example.com", estimated_tier="ai_office", note="estimator; tier=ai_office",
@@ -176,9 +180,32 @@ def test_repeat_estimator_signup_updates_estimate_silently(client):
     assert r1.status_code == r2.status_code == 200 and r1.content == r2.content
     assert len(db.waitlist.docs) == 1
     d = db.waitlist.docs[0]
-    assert d["estimated_tier"] == "ai_office" and d["estimator_detail"] == "estimator; tier=ai_office"
-    assert d["name"] == "" and d["note"] == "estimator; tier=growth" and d["source"] == "website form"
+    assert d["estimated_tier"] == "growth" and d["note"] == "estimator; tier=growth"
+    assert d["name"] == "" and d["source"] == "website form" and d["source_detail"] == "estimator"
+    assert "estimator_detail" not in d and "estimator_updated_at" not in d
     assert sent == ["a@example.com"]  # no second email
+
+
+def test_repeat_signup_only_fills_blanks(client):
+    c, db, sent = client
+    c.post(WL, json={"email": "a@example.com"})  # landing signup: no tier, no detail, no note
+    c.post(WL, json=_est(email="a@example.com", estimated_tier="growth", note="estimator; tier=growth"))
+    d = db.waitlist.docs[0]
+    assert (d["estimated_tier"], d["source_detail"], d["note"]) == ("growth", "estimator", "estimator; tier=growth")
+    assert d["source"] == "landing"  # the lead's source is never rewritten
+    c.post(WL, json=_est(email="a@example.com", estimated_tier="high_volume", note="other"))
+    d = db.waitlist.docs[0]
+    assert (d["estimated_tier"], d["note"]) == ("growth", "estimator; tier=growth")
+    assert sent == ["a@example.com"]
+
+
+def test_repeat_signup_fills_missing_legacy_fields(client):
+    c, db, sent = client
+    db.waitlist.docs.append({"id": "old", "email": "legacy@example.com"})  # pre-#12 row: fields absent
+    c.post(WL, json=_est(email="legacy@example.com"))
+    d = db.waitlist.docs[0]
+    assert d["estimated_tier"] == "growth" and d["source_detail"] == "estimator"
+    assert sent == []
 
 
 def test_repeat_landing_signup_does_not_touch_estimate(client):
@@ -186,7 +213,40 @@ def test_repeat_landing_signup_does_not_touch_estimate(client):
     c.post(WL, json=_est())
     c.post(WL, json={"email": "a@example.com", "note": "landing again"})
     d = db.waitlist.docs[0]
-    assert d["estimated_tier"] == "growth" and "estimator_detail" not in d
+    assert d["estimated_tier"] == "growth" and d["note"] == "estimator; tier=growth"
+
+
+@pytest.mark.parametrize("raw,stored", [
+    ("<script>alert(1)</script>Call me", "alert(1)Call me"),
+    ("<img src=x onerror=alert(1)>hi", "hi"),
+    ("a < b > c", "a  b  c"),
+    ("line1\nline2\tok\x00\x07", "line1\nline2\tok"),
+    ("plain note; tier=growth", "plain note; tier=growth"),
+])
+def test_note_is_stored_as_plain_text(client, raw, stored):
+    c, db, _ = client
+    assert c.post(WL, json=_est(note=raw)).status_code == 200
+    assert db.waitlist.docs[0]["note"] == stored
+    assert "<" not in db.waitlist.docs[0]["note"]
+
+
+def test_other_text_fields_sanitized_and_repeat_script_note_not_stored(client):
+    c, db, _ = client
+    c.post(WL, json={"email": "x@example.com", "name": "<b>Pat</b>", "business_name": "<i>Pat's</i> HVAC",
+                     "industry": "<script>x</script>HVAC"})
+    d = db.waitlist.docs[0]
+    assert (d["name"], d["business_name"], d["industry"]) == ("Pat", "Pat's HVAC", "xHVAC")
+    c.post(WL, json={"email": "x@example.com", "note": "<script>steal()</script>"})
+    assert db.waitlist.docs[0]["note"] == "steal()"  # was blank, so filled, but as plain text
+
+
+def test_no_frontend_renders_waitlist_rows_as_html():
+    # No admin/export view reads the waitlist today. If one is added, it must escape on output
+    # (React text nodes do; dangerouslySetInnerHTML or raw CSV/HTML exports must not be used).
+    src = Path(__file__).resolve().parents[2] / "frontend" / "src"
+    offenders = [p for p in src.rglob("*.js*") if "dangerouslySetInnerHTML" in p.read_text(errors="ignore")
+                 and "waitlist" in p.read_text(errors="ignore").lower()]
+    assert offenders == []
 
 
 def test_estimator_honeypot_and_hardening_apply(client):

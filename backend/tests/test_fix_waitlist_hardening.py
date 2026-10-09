@@ -28,6 +28,9 @@ def _match(doc, q):
         if isinstance(v, dict) and "$exists" in v:
             if (k in doc) != bool(v["$exists"]):
                 return False
+        elif isinstance(v, dict) and "$in" in v:  # Mongo: None in $in also matches a missing field
+            if doc.get(k) not in v["$in"]:
+                return False
         elif doc.get(k) != v:
             return False
     return True
