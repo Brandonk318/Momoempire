@@ -292,7 +292,7 @@ export default function Landing() {
             ) : (
               <form onSubmit={submitWaitlist} className="space-y-3" data-testid="waitlist-form">
                 {/* EMP-WL-013: every field has a visible <label> (existing wording: the locale keys or the
-                    old placeholder text). Placeholders and borders meet contrast (see Landing.contrast.test.js). */}
+                    old placeholder text). Placeholders and borders meet contrast (scripts/waitlist-contrast.js, WaitlistA11y.test.js). */}
                 <div>
                   <label htmlFor="wl-email" className="block text-sm text-white/80 mb-1.5">{t("landing.waitlist_email")}</label>
                   <Input id="wl-email" ref={wlEmailRef} required type="email" autoComplete="email" placeholder="you@yourbusiness.com" value={wlForm.email} onChange={(e) => setWlForm({ ...wlForm, email: e.target.value })} aria-invalid={wlError ? true : undefined} aria-describedby={wlError ? "wl-error" : undefined} className="bg-white/5 border-white/40 text-white placeholder:text-white/60" data-testid="waitlist-email" />
