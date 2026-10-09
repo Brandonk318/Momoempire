@@ -41,12 +41,48 @@ class _Res:
         self.modified_count, self.upserted_id = modified, upserted_id
 
 
+class _Cursor:
+    def __init__(self, docs):
+        self._it = iter(docs)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self._it)
+        except StopIteration:
+            raise StopAsyncIteration
+
+
 class FakeWaitlist:
+    # find/find_one/delete_one/replace_one are used by the dedupe-before-index step in the stacked
+    # follow-ups branch (fix/waitlist-followups), so these tests pass with or without it.
     def __init__(self):
         self.docs = []
 
     async def create_index(self, *a, **k):
         return None
+
+    def find(self, q=None, projection=None):
+        return _Cursor([copy.deepcopy(d) for d in self.docs if _match(d, q)])
+
+    async def find_one(self, q):
+        return next((copy.deepcopy(d) for d in self.docs if _match(d, q)), None)
+
+    async def delete_one(self, q):
+        for i, d in enumerate(self.docs):
+            if _match(d, q):
+                del self.docs[i]
+                return
+
+    async def replace_one(self, q, doc, upsert=False):
+        for i, d in enumerate(self.docs):
+            if _match(d, q):
+                self.docs[i] = copy.deepcopy(doc)
+                return
+        if upsert:
+            self.docs.append(copy.deepcopy(doc))
 
     async def update_one(self, q, upd, upsert=False):
         for d in self.docs:
@@ -66,6 +102,10 @@ class FakeWaitlist:
 class FakeDB:
     def __init__(self):
         self.waitlist = FakeWaitlist()
+        self.waitlist_duplicates = FakeWaitlist()
+
+    def __getitem__(self, name):
+        return getattr(self, name)
 
 
 @pytest.fixture
