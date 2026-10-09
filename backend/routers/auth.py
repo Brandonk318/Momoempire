@@ -12,6 +12,7 @@ from security import (
     _secret, JWT_ALGORITHM,
 )
 import jwt
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -114,7 +115,40 @@ async def login(data: LoginIn, request: Request, response: Response):
     set_auth_cookies(response, access, refresh)
     user.pop("password_hash", None)
     user.pop("_id", None)
+    user["must_change_password"] = bool(user.get("must_change_password"))
     return user
+
+
+class SetPasswordIn(BaseModel):
+    new_password: str
+    current_password: str | None = None
+
+
+@router.post("/set-password")
+async def set_password(data: SetPasswordIn, user: dict = Depends(get_current_user)):
+    """Set a new password. Required (and the only allowed action) while must_change_password is set."""
+    from password_policy import password_problems
+    db = get_db()
+    problems = password_problems(data.new_password)
+    if problems:
+        raise HTTPException(400, "Password " + "; ".join(problems))
+    full = await db.users.find_one({"id": user["id"]})
+    if not full:
+        raise HTTPException(404, "User not found")
+    forced = bool(full.get("must_change_password"))
+    if not forced:
+        # Normal change: must prove the current password.
+        if not data.current_password or not verify_password(data.current_password, full.get("password_hash") or ""):
+            raise HTTPException(400, "Current password is incorrect")
+    if full.get("password_hash") and verify_password(data.new_password, full["password_hash"]):
+        raise HTTPException(400, "New password must differ from the current one")
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password_hash": hash_password(data.new_password),
+                  "must_change_password": False,
+                  "password_changed_at": _now_iso()}},
+    )
+    return {"status": "ok", "must_change_password": False}
 
 
 @router.post("/logout")
@@ -185,8 +219,16 @@ async def reset_password(data: ResetIn):
         exp = datetime.fromisoformat(exp)
     if exp < datetime.now(timezone.utc):
         raise HTTPException(400, "Token expired")
-    await db.users.update_one({"id": rec["user_id"]},
-                              {"$set": {"password_hash": hash_password(data.new_password)}})
+    target = await db.users.find_one({"id": rec["user_id"]}) or {}
+    patch = {"password_hash": hash_password(data.new_password)}
+    if target.get("must_change_password") or target.get("role") == "platform_admin":
+        from password_policy import password_problems
+        problems = password_problems(data.new_password)
+        if problems:
+            raise HTTPException(400, "Password " + "; ".join(problems))
+        patch["must_change_password"] = False
+        patch["password_changed_at"] = _now_iso()
+    await db.users.update_one({"id": rec["user_id"]}, {"$set": patch})
     await db.password_reset_tokens.update_one({"token": data.token}, {"$set": {"used": True}})
     return {"status": "ok"}
 
