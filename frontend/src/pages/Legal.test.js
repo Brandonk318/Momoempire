@@ -130,3 +130,21 @@ describe("Last updated date", () => {
     expect(container.querySelector('[data-testid="legal-last-updated"]').textContent).toBe("Last updated: 2026-10-01");
   });
 });
+
+
+// EMP-WL-095: the waitlist page loads Google Fonts and runs on Cloudflare; privacy names them in
+// a TODO slot for Brann/counsel (no legal text written).
+test("waitlist /privacy has a TODO(Brann/counsel) slot naming Google Fonts and Cloudflare", async () => {
+  process.env.REACT_APP_WAITLIST_ONLY = "true";
+  await render(<WaitlistRoutes />, "/privacy");
+  const slot = container.querySelector('[data-todo-slot="privacy-site-processors"]');
+  expect(slot).not.toBeNull();
+  expect(slot.textContent).toMatch(/^\[TODO\(Brann\/counsel\): .*Google Fonts.*Cloudflare/);
+});
+
+test("full build /privacy is unchanged (no processors slot)", async () => {
+  delete process.env.REACT_APP_WAITLIST_ONLY;
+  await render(<Privacy />);
+  expect(container.querySelector('[data-todo-slot="privacy-site-processors"]')).toBeNull();
+});
+
