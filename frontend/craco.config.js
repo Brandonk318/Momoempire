@@ -94,6 +94,12 @@ if (isDevServer && process.env.DISABLE_EMERGENT_OVERLAY !== "true") {
   }
 }
 
+// EMP-WL-014: site metadata (title, description, Open Graph/Twitter tags; favicon links are in
+// public/index.html), robots.txt and sitemap.xml, all from REACT_APP_SITE_* env vars.
+// Throws (fails the build) if REACT_APP_SITE_URL / REACT_APP_OG_IMAGE_URL are not absolute URLs.
+const { siteConfig, SiteMetaPlugin } = require("./site-meta");
+const siteMeta = siteConfig(process.env);
+
 let webpackConfig = {
   eslint: {
     configure: {
@@ -134,6 +140,8 @@ let webpackConfig = {
       if (config.enableHealthCheck && healthPluginInstance) {
         webpackConfig.plugins.push(healthPluginInstance);
       }
+
+      webpackConfig.plugins.push(new SiteMetaPlugin(siteMeta));
 
       // Overlay's HTML injection + compile-error capture; self-gates on mode !== development.
       if (emergentOverlay) {
