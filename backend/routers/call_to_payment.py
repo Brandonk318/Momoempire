@@ -257,8 +257,8 @@ async def owner_decision(qid: str, data: QuoteDecisionIn, user: dict = Depends(r
 
     # Email customer with public link
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "name": 1, "slug": 1}) or {}
-    base = os.environ.get("FRONTEND_URL") or ""
-    link = f"{base}/q/{quote['public_token']}" if base else f"/q/{quote['public_token']}"
+    from public_links import quote_link
+    link = quote_link(quote["public_token"])
     if quote.get("customer_email"):
         msg = (
             f"Hi {quote['customer_name']},<br/><br/>"
@@ -282,12 +282,31 @@ async def owner_decision(qid: str, data: QuoteDecisionIn, user: dict = Depends(r
 
 
 # -------- Public quote endpoints (customer-facing) --------
+# EMP-W-CF-022: a draft is not public yet (same 404 as an unknown token), and expires_at is
+# enforced. TODO(Brann): expired quotes stay viewable (marked expired) but can't be accepted;
+# re-approving an expired quote does not extend expires_at.
+def _quote_expired(q: dict, now: datetime | None = None) -> bool:
+    raw = q.get("expires_at")
+    if not raw:
+        return False  # CRM estimates may have no expiry
+    try:
+        exp = raw if isinstance(raw, datetime) else datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return False  # unparseable legacy value: treat as no expiry rather than block the customer
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    return (now or datetime.now(timezone.utc)) >= exp
+
+
 @public_router.get("/quotes/{token}")
 async def public_quote(token: str):
     db = get_db()
     q = await db.estimates.find_one({"public_token": token}, {"_id": 0})
-    if not q:
+    if not q or q.get("status") == "draft":
         raise HTTPException(404, "Not found")
+    q["expired"] = _quote_expired(q)
+    q["can_accept"] = bool(q.get("owner_approved")) and not q["expired"] \
+        and q.get("status") not in ("declined", "approved", "accepted")
     # Hide owner's internal notes
     q.pop("notes", None)
     tenant = await db.tenants.find_one({"id": q["tenant_id"]}, {"_id": 0, "name": 1, "slug": 1, "stripe_connect_id": 1}) or {}
@@ -307,7 +326,7 @@ async def accept_quote(token: str, data: QuoteAcceptIn):
     Idempotent: a second accept returns the same invoice/appointment."""
     db = get_db()
     quote = await db.estimates.find_one({"public_token": token}, {"_id": 0})
-    if not quote:
+    if not quote or quote.get("status") == "draft":
         raise HTTPException(404, "Quote not found")
     if not quote.get("owner_approved"):
         raise HTTPException(400, "Quote not approved yet")
@@ -318,6 +337,8 @@ async def accept_quote(token: str, data: QuoteAcceptIn):
     existing_inv = await db.invoices.find_one({"quote_id": quote["id"]}, {"_id": 0})
     if existing_inv:
         return {"ok": True, "idempotent": True, "invoice": existing_inv}
+    if _quote_expired(quote):  # after the idempotent re-accept, which must keep working
+        raise HTTPException(400, "Quote has expired")
 
     now = _now_iso()
     # Create appointment (job)
@@ -487,7 +508,15 @@ async def create_invoice_payment(token: str, data: PayIntentIn):
         }},
         upsert=True,
     )
-    return {"client_secret": intent["client_secret"], "amount_cents": amount, "payment_intent_id": intent["id"]}
+    return {
+        "client_secret": intent["client_secret"],
+        "amount_cents": amount,
+        "payment_intent_id": intent["id"],
+        # Needed by Stripe.js on the public /i/:token page for a direct charge.
+        # Connected account ids and publishable keys are not secrets.
+        "stripe_account": acct_id,
+        "publishable_key": os.environ.get("STRIPE_PUBLISHABLE_KEY") or None,
+    }
 
 
 # ================== CONNECTED-ACCOUNT WEBHOOK ==================
@@ -716,28 +745,68 @@ async def set_reminder_settings(iid: str, data: ReminderSettingsIn, user: dict =
     return {"ok": True, **patch}
 
 
-async def run_overdue_reminders() -> dict:
-    """Daily cron. Scans invoices past due_at that aren't paid or paused."""
+async def _claim_overdue_reminder(db, inv: dict, now: datetime) -> str | None:
+    """EMP-FIX-036 (blocker 5): at most ONE overdue reminder per invoice per UTC day.
+
+    The idempotency key is `overdue:<invoice id>:<UTC date>`, stored as the _id of a
+    `reminder_claims` document, so the insert is atomic: a second run the same day (cron
+    retried, fired twice, or two workers at once) gets DuplicateKeyError and skips. The
+    winner then counts the reminder with a conditional update that re-checks, at that
+    moment, that the invoice is still unpaid, not paused and under max_reminders, so a
+    stale scan never sends. Counting happens before sending: if the send then fails we
+    do not retry the same day (at most once per day); the next day's run tries again.
+    Returns the claim id, or None when this run must not send.
+    """
+    from pymongo.errors import DuplicateKeyError
+    day = now.date().isoformat()
+    claim_id = f"overdue:{inv['id']}:{day}"
+    try:
+        await db.reminder_claims.insert_one({
+            "_id": claim_id, "kind": "overdue_invoice", "invoice_id": inv["id"],
+            "tenant_id": inv.get("tenant_id"), "day": day, "status": "claimed", "claimed_at": _now_iso(),
+        })
+    except DuplicateKeyError:
+        return None
+    res = await db.invoices.update_one(
+        {"id": inv["id"], "status": {"$in": ["sent", "overdue"]}, "reminders_paused_at": None,
+         "$expr": {"$lt": [{"$ifNull": ["$reminders_sent", 0]}, {"$ifNull": ["$max_reminders", 3]}]}},
+        {"$set": {"status": "overdue", "last_reminder_at": _now_iso(), "last_reminder_day": day,
+                  "updated_at": _now_iso()}, "$inc": {"reminders_sent": 1}},
+    )
+    if res.modified_count != 1:
+        await db.reminder_claims.update_one({"_id": claim_id}, {"$set": {"status": "skipped"}})
+        return None
+    return claim_id
+
+
+async def run_overdue_reminders(now: datetime | None = None) -> dict:
+    """Daily cron. Scans invoices past due_at that aren't paid or paused.
+    Safe to run any number of times a day: see _claim_overdue_reminder."""
     db = get_db()
-    now = datetime.now(timezone.utc)
+    now = now or datetime.now(timezone.utc)
     sent = 0
     invs = await db.invoices.find({
         "status": {"$in": ["sent", "overdue"]},
         "reminders_paused_at": None,
     }, {"_id": 0}).to_list(5000)
     for inv in invs:
+        claim_id = None
         try:
             due = datetime.fromisoformat((inv.get("due_at") or now.isoformat()).replace("Z", "+00:00"))
             if now < due:
                 continue
             if int(inv.get("reminders_sent") or 0) >= int(inv.get("max_reminders") or 3):
                 continue
+            claim_id = await _claim_overdue_reminder(db, inv, now)
+            if not claim_id:
+                continue
+
             # Build & send
             if inv.get("customer_email"):
                 tenant = await db.tenants.find_one({"id": inv["tenant_id"]}, {"_id": 0, "name": 1, "lang": 1}) or {}
                 lang = (tenant.get("lang") or "en").lower()
-                base = os.environ.get("FRONTEND_URL") or ""
-                link = f"{base}/i/{inv['public_token']}" if base else f"/i/{inv['public_token']}"
+                from public_links import invoice_link
+                link = invoice_link(inv["public_token"])
                 remaining = (int(inv["total_cents"]) - int(inv.get("amount_paid_cents") or 0)) / 100
                 if lang.startswith("es"):
                     subject = "Recordatorio: factura vencida"
@@ -750,16 +819,21 @@ async def run_overdue_reminders() -> dict:
                            f"past due. Remaining balance: <b>${remaining:.2f}</b>. "
                            f'<a href="{link}">Pay online</a>.')
                 html = followup_html(business=tenant.get("name", "us"), message=msg)
-                await send_email(to=inv["customer_email"], subject=subject, html=html,
-                                 from_name=tenant.get("name", "AI Office"))
-            await db.invoices.update_one(
-                {"id": inv["id"]},
-                {"$set": {"status": "overdue", "last_reminder_at": _now_iso(),
-                          "updated_at": _now_iso()}, "$inc": {"reminders_sent": 1}},
-            )
+                email_id = await send_email(to=inv["customer_email"], subject=subject, html=html,
+                                            from_name=tenant.get("name", "AI Office"))
+                outcome = {"status": "sent" if email_id else "send_failed", "email_id": email_id}
+            else:
+                outcome = {"status": "no_email"}
+            # The invoice was already counted / marked overdue when the claim was won.
+            await db.reminder_claims.update_one({"_id": claim_id}, {"$set": {**outcome, "done_at": _now_iso()}})
             sent += 1
         except Exception as e:
             log.warning("overdue reminder failed id=%s: %s", inv.get("id"), e)
+            if claim_id:
+                try:
+                    await db.reminder_claims.update_one({"_id": claim_id}, {"$set": {"status": "error"}})
+                except Exception:
+                    pass
     return {"sent": sent, "scanned": len(invs)}
 
 
