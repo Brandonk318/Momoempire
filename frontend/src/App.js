@@ -8,8 +8,10 @@ import AdminLayout from "@/components/layouts/AdminLayout";
 // Public
 import Landing from "@/pages/Landing";
 import Pricing from "@/pages/Pricing";
+import Estimate from "@/pages/Estimate";
 import { Privacy, Terms } from "@/pages/Legal";
 import Login from "@/pages/Login";
+import SetPassword from "@/pages/SetPassword";
 import Signup from "@/pages/Signup";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
@@ -20,6 +22,8 @@ import PaymentCancel from "@/pages/PaymentCancel";
 import CustomerPortalPublic from "@/pages/CustomerPortalPublic";
 import InviteAccept from "@/pages/InviteAccept";
 import ReferralLanding from "@/pages/ReferralLanding";
+import PublicQuote from "@/pages/PublicQuote";
+import PublicInvoice from "@/pages/PublicInvoice";
 import ReviewPublic from "@/pages/ReviewPublic";
 import AuthCallback from "@/pages/AuthCallback";
 import TestimonialConsent from "@/pages/TestimonialConsent";
@@ -79,6 +83,7 @@ function Router() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/pricing" element={<Pricing />} />
+      <Route path="/estimate" element={<Estimate />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/login" element={<Login />} />
@@ -90,11 +95,14 @@ function Router() {
       <Route path="/portal/:slug" element={<CustomerPortalPublic />} />
       <Route path="/invite" element={<InviteAccept />} />
       <Route path="/r/:code" element={<ReferralLanding />} />
+      <Route path="/q/:token" element={<PublicQuote />} />
+      <Route path="/i/:token" element={<PublicInvoice />} />
       <Route path="/reviews/:token" element={<ReviewPublic />} />
       <Route path="/t/consent/:token" element={<TestimonialConsent />} />
       <Route path="/payment/success" element={<PaymentSuccess />} />
       <Route path="/payment/cancel" element={<PaymentCancel />} />
 
+      <Route path="/set-password" element={<ProtectedRoute><SetPassword /></ProtectedRoute>} />
       <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
       <Route path="/app" element={<Protected><Home /></Protected>} />
