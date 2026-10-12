@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 os.environ.setdefault("JWT_SECRET", "emp-dev-002-test-secret")
 os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "emp_dev_002_test")
+os.environ.setdefault("STRIPE_SECRET_KEY", "sk_test_unit")  # fake test value; #7 removed the placeholder fallback
 
 from routers import payments as payments_mod  # noqa: E402
 from security import require_tenant_user  # noqa: E402
