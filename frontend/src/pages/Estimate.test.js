@@ -10,6 +10,7 @@ jest.mock("@/i18n", () => jest.requireActual("../i18n"), { virtual: true });
 jest.mock("@/i18n/estimator", () => jest.requireActual("../i18n/estimator"), { virtual: true });
 jest.mock("@/config/estimatorRules", () => jest.requireActual("../config/estimatorRules"), { virtual: true });
 jest.mock("@/lib/estimator", () => jest.requireActual("../lib/estimator"), { virtual: true });
+jest.mock("@/lib/waitlistErrors", () => jest.requireActual("../lib/waitlistErrors"), { virtual: true });
 jest.mock("@/components/ui/button", () => jest.requireActual("../components/ui/button"), { virtual: true });
 jest.mock("@/components/ui/input", () => jest.requireActual("../components/ui/input"), { virtual: true });
 jest.mock("@/components/Logo", () => ({ Logo: () => null }), { virtual: true });
@@ -158,6 +159,27 @@ test("locations=0 is rejected too, then fixing it shows the plan", async () => {
   answer({ "estimate-locations": "1" });
   expect((await findByTestId("estimate-plan-name")).textContent).toBe("Starter");
   expect(byTestId("estimate-locations-error")).toBeNull();
+});
+
+// EMP-WL-064 / WL-071
+const httpError = (status, detail) => Object.assign(new Error(`Request failed with status code ${status}`), {
+  response: { status, data: { detail } },
+});
+test.each([
+  ["en", 422, [{ loc: ["email"], msg: "value is not a valid email address: An email address must have an @-sign." }], "Please enter a valid email address."],
+  ["es", 422, [{ loc: ["email"], msg: "value is not a valid email address: An email address must have an @-sign." }], "Ingrese un correo electrónico válido."],
+  ["es", 503, "Sorry, we couldn't save your signup right now. Please try again in a few minutes.", "Lo sentimos, no pudimos guardar su registro en este momento. Inténtelo de nuevo en unos minutos."],
+])("waitlist error from the estimator (%s, %d) is plain and translated", async (lang, status, detail, expected) => {
+  const { toast } = require("sonner");
+  api.post.mockImplementationOnce(() => Promise.reject(httpError(status, detail)));
+  await renderPage();
+  await act(async () => { await i18n.changeLanguage(lang); });
+  answer({});
+  await findByTestId("estimate-result");
+  change(getByTestId("estimate-email"), "owner@example.com");
+  submit(getByTestId("estimate-email-form"));
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  expect(toast.error).toHaveBeenLastCalledWith(expected);
 });
 
 test("email capture is an honest 'Join the waitlist' with honeypot, Turnstile token and a consent slot", async () => {
