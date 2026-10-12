@@ -59,7 +59,8 @@ test("quote the owner never approved (dashboard estimate) shows a message instea
 
 test("dashboard only shares links customers can act on", () => {
   expect(canShareQuoteLink({ status: "sent", owner_approved: true })).toBe(true);
-  expect(canShareQuoteLink({ status: "sent" })).toBe(false); // dashboard estimate marked sent
+  expect(canShareQuoteLink({ status: "sent", owner_approved: true, approved_at: "2026-10-11T00:00:00Z" })).toBe(true); // dashboard Send
+  expect(canShareQuoteLink({ status: "sent" })).toBe(false); // sent before Send approved estimates
   expect(canShareQuoteLink({ status: "draft", owner_approved: false })).toBe(false);
   expect(canShareQuoteLink({ status: "draft", owner_approved: true })).toBe(false);
   expect(canShareQuoteLink(null)).toBe(false);

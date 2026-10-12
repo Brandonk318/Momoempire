@@ -50,7 +50,7 @@ def env(monkeypatch):
         _quote("ok"),
         _quote("draft", status="draft", owner_approved=False),
         _quote("c2pdraft", status="draft", owner_approved=False),
-        _quote("crm", owner_approved=None, expires_at=None),          # dashboard estimate marked sent
+        _quote("crm", owner_approved=None, expires_at=None),          # dashboard estimate sent before Send approved
         _quote("old", expires_at=(NOW - timedelta(minutes=1)).isoformat()),
         _quote("naive", expires_at=(NOW - timedelta(days=1)).replace(tzinfo=None).isoformat()),
         _quote("junk", expires_at="not a date"),
@@ -93,7 +93,7 @@ def test_approved_quote_can_be_accepted(env):
     assert after["can_accept"] is False  # already accepted
 
 
-def test_dashboard_estimate_is_viewable_but_cannot_be_accepted(env):
+def test_unapproved_sent_estimate_is_viewable_but_cannot_be_accepted(env):
     client, _ = env
     body = client.get(f"{Q}/crm").json()
     assert body["can_accept"] is False and body["expired"] is False
@@ -131,3 +131,78 @@ def test_quote_expired_helper_handles_datetimes():
     assert c2p._quote_expired({"expires_at": past}) is True
     assert c2p._quote_expired({"expires_at": datetime(2999, 1, 1, tzinfo=timezone.utc)}) is False
     assert c2p._quote_expired({}) is False
+
+
+# ---- Dashboard Send approves (Brann, 2026-10-11): the customer can then accept online ----
+T = "/api/tenants/estimates"
+OWNER = {"id": "u1", "tenant_id": "t1", "role": "staff"}
+
+
+@pytest.fixture
+def crm_env(env):
+    _, sync = env
+    from routers import crm
+    from security import require_tenant_user
+    app = FastAPI()
+    app.include_router(crm.router, prefix="/api")
+    app.include_router(c2p.public_router, prefix="/api")
+    app.dependency_overrides[require_tenant_user] = lambda: OWNER
+    with TestClient(app) as client:
+        yield client, sync
+
+
+def _new_estimate(client, **kw):
+    body = {"customer_name": "Ana", "customer_phone": "", "title": "Gutter clean",
+            "lines": [{"description": "Clean", "quantity": 2, "unit_price": 40}], **kw}
+    r = client.post(T, json=body)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "draft" and not r.json().get("owner_approved")
+    return r.json()
+
+
+def test_unsent_dashboard_estimate_is_not_public(crm_env):
+    client, sync = crm_env
+    est = _new_estimate(client)
+    assert client.get(f"{Q}/{est['public_token']}").status_code == 404
+    assert client.post(f"{Q}/{est['public_token']}/accept", json={}).status_code == 404
+    assert sync.invoices.count_documents({}) == 0 and sync.appointments.count_documents({}) == 0
+
+
+def test_send_approves_and_customer_can_accept(crm_env):
+    client, sync = crm_env
+    est = _new_estimate(client)
+    sent = client.post(f"{T}/{est['id']}/send")
+    assert sent.status_code == 200
+    s = sent.json()
+    assert s["status"] == "sent" and s["owner_approved"] is True
+    assert s["approved_by"] == "u1" and s["approved_at"]
+    assert s.get("expires_at") == est.get("expires_at")  # Send does not touch expiry
+
+    view = client.get(f"{Q}/{est['public_token']}").json()
+    assert view["can_accept"] is True and view["expired"] is False
+    a = client.post(f"{Q}/{est['public_token']}/accept", json={})
+    assert a.status_code == 200, a.text
+    inv = a.json()["invoice"]
+    assert inv["quote_id"] == est["id"] and inv["total_cents"] == 8000
+    assert sync.invoices.count_documents({"quote_id": est["id"]}) == 1
+    assert sync.appointments.count_documents({"quote_id": est["id"]}) == 1
+    assert sync.estimates.find_one({"id": est["id"]})["status"] == "approved"
+    assert client.get(f"{Q}/{est['public_token']}").json()["can_accept"] is False
+
+
+def test_sent_estimate_past_its_expiry_still_cannot_be_accepted(crm_env):
+    client, sync = crm_env
+    est = _new_estimate(client, expires_at=(NOW - timedelta(hours=1)).isoformat())
+    assert client.post(f"{T}/{est['id']}/send").status_code == 200
+    view = client.get(f"{Q}/{est['public_token']}").json()
+    assert view["expired"] is True and view["can_accept"] is False
+    r = client.post(f"{Q}/{est['public_token']}/accept", json={})
+    assert r.status_code == 400 and r.json()["detail"] == "Quote has expired"
+    assert sync.invoices.count_documents({}) == 0
+
+
+def test_send_is_tenant_scoped(crm_env):
+    client, sync = crm_env
+    sync.estimates.insert_one(_quote("other", id="q_other", tenant_id="t2", status="draft", owner_approved=False))
+    assert client.post(f"{T}/q_other/send").status_code == 404
+    assert sync.estimates.find_one({"id": "q_other"})["owner_approved"] is False
