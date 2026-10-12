@@ -89,6 +89,13 @@ async def create_checkout(req: CheckoutRequest, user: dict = Depends(require_ten
     return {"checkout_url": session.url, "session_id": session.id}
 
 
+# EMP-W-CF-019: Checkout payment_status values that may activate a plan. "unpaid" never does
+# (delayed methods such as bank debits finish later via checkout.session.async_payment_succeeded).
+# TODO(Brann): "no_payment_required" (e.g. a 100% coupon or a free trial) keeps activating, as
+# before this fix; confirm that is wanted.
+ACTIVATING_PAYMENT_STATUSES = ("paid", "no_payment_required")
+
+
 @router.get("/status/{session_id}")
 async def payment_status(session_id: str):
     db = get_db()
@@ -100,7 +107,9 @@ async def payment_status(session_id: str):
             if not configure_stripe_api_key():
                 return {"session_id": record["session_id"], "status": record["status"], "payment_status": record["payment_status"]}
             s = stripe.checkout.Session.retrieve(session_id)
-            if s.payment_status == "paid" or s.status == "complete":
+            # EMP-W-CF-019: a "complete" session can still be payment_status "unpaid" (delayed
+            # payment methods); never activate a plan for that. See ACTIVATING_PAYMENT_STATUSES.
+            if s.payment_status in ACTIVATING_PAYMENT_STATUSES:
                 await db.payment_transactions.update_one(
                     {"session_id": session_id, "payment_status": {"$ne": "paid"}},
                     {"$set": {
@@ -136,25 +145,39 @@ async def stripe_webhook(request: Request):
     event = construct_stripe_event(payload, sig, "STRIPE_WEBHOOK_SECRET")
     obj, t = event["data"]["object"], event["type"]
     now = datetime.now(timezone.utc).isoformat()
-    if t == "checkout.session.completed":
-        await db.payment_transactions.update_one(
-            {"session_id": obj["id"], "payment_status": {"$ne": "paid"}},
-            {"$set": {
-                "status": "completed",
-                "payment_status": obj.get("payment_status", "paid"),
-                "stripe_subscription_id": obj.get("subscription"),
-                "stripe_customer_id": obj.get("customer"),
-                "stripe_payment_intent_id": obj.get("payment_intent"),
-                "updated_at": now,
-            }},
-        )
-        meta = obj.get("metadata") or {}
-        if meta.get("tenant_id"):
-            await db.tenants.update_one({"id": meta["tenant_id"]}, {"$set": {
-                "subscription_status": "active",
-                "plan_id": meta.get("plan_id"),
-                "stripe_subscription_id": obj.get("subscription"),
-                "stripe_customer_id": obj.get("customer"),
-                "updated_at": now,
-            }})
+    # EMP-W-CF-019: replay check. Stripe event ids are unique; a re-delivered or replayed event
+    # (e.g. an old checkout.session.completed after a cancellation) is acknowledged and ignored.
+    from pymongo.errors import DuplicateKeyError
+    ev_id = event.get("id")
+    if ev_id:
+        try:
+            await db.platform_webhook_events.insert_one({"_id": ev_id, "type": t, "received_at": now})
+        except DuplicateKeyError:
+            return {"status": "ok", "duplicate": True}
+    try:
+        if t in ("checkout.session.completed", "checkout.session.async_payment_succeeded"):
+            await db.payment_transactions.update_one(
+                {"session_id": obj["id"], "payment_status": {"$ne": "paid"}},
+                {"$set": {
+                    "status": "completed",
+                    "payment_status": obj.get("payment_status", "paid"),
+                    "stripe_subscription_id": obj.get("subscription"),
+                    "stripe_customer_id": obj.get("customer"),
+                    "stripe_payment_intent_id": obj.get("payment_intent"),
+                    "updated_at": now,
+                }},
+            )
+            meta = obj.get("metadata") or {}
+            if meta.get("tenant_id") and obj.get("payment_status", "paid") in ACTIVATING_PAYMENT_STATUSES:
+                await db.tenants.update_one({"id": meta["tenant_id"]}, {"$set": {
+                    "subscription_status": "active",
+                    "plan_id": meta.get("plan_id"),
+                    "stripe_subscription_id": obj.get("subscription"),
+                    "stripe_customer_id": obj.get("customer"),
+                    "updated_at": now,
+                }})
+    except Exception:
+        if ev_id:  # let Stripe's retry through instead of treating it as a duplicate
+            await db.platform_webhook_events.delete_one({"_id": ev_id})
+        raise
     return {"status": "ok"}

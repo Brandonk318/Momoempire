@@ -52,6 +52,14 @@ def _invoice_db(paid_store: dict):
     db.invoices.update_one = AsyncMock(side_effect=update_invoice)
     db.webhook_events.insert_one = AsyncMock()
     db.webhook_events.update_one = AsyncMock()
+    # EMP-FIX-037 (PR #7 follow-ups): the Connect event must come from the invoice tenant's own
+    # account and match the PaymentIntent we recorded; platform events go through a replay gate.
+    db.tenants.find_one = AsyncMock(return_value={"stripe_connect_id": "acct_1"})
+    db.invoice_payments.find_one = AsyncMock(return_value={
+        "invoice_id": "inv_1", "tenant_id": "t1", "amount_cents": 1000, "connected_account": "acct_1"})
+    db.invoice_payments.update_one = AsyncMock()
+    db.platform_webhook_events.insert_one = AsyncMock()
+    db.platform_webhook_events.delete_one = AsyncMock()
     db.payment_transactions.update_one = AsyncMock()
     db.tenants.update_one = AsyncMock()
     # any other collection calls in success path
@@ -68,9 +76,10 @@ def _pi_event(ev_id: str = "evt_1") -> bytes:
         "id": ev_id,
         "object": "event",
         "type": "payment_intent.succeeded",
+        "account": "acct_1",
         "data": {"object": {
             "id": "pi_1", "object": "payment_intent",
-            "amount_received": 1000, "amount": 1000,
+            "amount_received": 1000, "amount": 1000, "currency": "usd",
             "metadata": {"invoice_id": "inv_1", "tenant_id": "t1"},
         }},
     }).encode()
