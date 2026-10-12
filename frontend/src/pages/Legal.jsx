@@ -76,6 +76,9 @@ export function Privacy() {
       </ul>
       <h2>Who sees it</h2>
       <p>Your workspace data is isolated per tenant. Our vendors — Twilio (voice/SMS), Stripe (payments), Resend (email), MongoDB (storage), OpenAI/Anthropic/Google (LLMs) — only receive the fields they need to perform the task, and are bound by their own privacy terms.</p>
+      {/* EMP-WL-095: the waitlist page itself loads Google Fonts and is served by Cloudflare (Pages,
+          and Turnstile when on), so visitors' IPs reach them. No wording is written here. */}
+      {wl && <TodoSlot id="privacy-site-processors" what="Google Fonts and Cloudflare (hosting, Turnstile) as processors of visitor data" />}
       <h2>Your rights</h2>
       <p>Email <a href="mailto:privacy@aioffice.io">privacy@aioffice.io</a> to export, correct, or delete your data. We will respond within 30 days.</p>
       <h2>Retention</h2>
