@@ -8,6 +8,7 @@ import AdminLayout from "@/components/layouts/AdminLayout";
 // Public
 import Landing from "@/pages/Landing";
 import Pricing from "@/pages/Pricing";
+import Estimate from "@/pages/Estimate";
 import { Privacy, Terms } from "@/pages/Legal";
 import Login from "@/pages/Login";
 import SetPassword from "@/pages/SetPassword";
@@ -82,6 +83,7 @@ function Router() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/pricing" element={<Pricing />} />
+      <Route path="/estimate" element={<Estimate />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/login" element={<Login />} />
