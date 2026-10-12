@@ -4,6 +4,14 @@ require("dotenv").config();
 // EMP-WL-023: fail fast if Turnstile is enabled for the build without a site key.
 require("./turnstile-env").assertTurnstileBuildEnv();
 
+// EMP-WL-073: the waitlist-only build never ships source maps (they exposed the original source
+// and comments). Set before react-scripts reads GENERATE_SOURCEMAP; forced, so a stray
+// GENERATE_SOURCEMAP=true in the Pages settings can't turn them back on. The full build is
+// unchanged (TODO(Brann): decide whether it should drop them too).
+if (process.env.REACT_APP_WAITLIST_ONLY === "true") {
+  process.env.GENERATE_SOURCEMAP = "false";
+}
+
 // Check if we're in development/preview mode (not production build)
 // Craco sets NODE_ENV=development for start, NODE_ENV=production for build
 const isDevServer = process.env.NODE_ENV !== "production";
