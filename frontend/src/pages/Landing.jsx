@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Logo } from "@/components/Logo";
@@ -32,7 +32,10 @@ const STEP_META = [
 ];
 
 export default function Landing() {
-  const { t } = useTranslation();
+  const { t: tCurrent, i18n } = useTranslation();
+  // EMP-WL-016: the waitlist page is English-only for now (most of its copy isn't translated), so
+  // its few translated labels stay English too, even for a Spanish browser or a saved "es" choice.
+  const t = isWaitlistOnly() ? i18n.getFixedT("en") : tCurrent;
   const [trial, setTrial] = useState(null);
   const [openFaq, setOpenFaq] = useState(0);
   const [wlForm, setWlForm] = useState({ email: "", name: "", business_name: "", industry: "", note: "", website: "", turnstile_token: "" });
@@ -40,6 +43,16 @@ export default function Landing() {
   const [wlSending, setWlSending] = useState(false);
   // WL-027: the waitlist-only build hides the demo, trial, login and pricing (their APIs 404 there).
   const waitlistOnly = isWaitlistOnly();
+  const wlEmailRef = useRef(null);
+
+  // EMP-WL-034: header/hero "Join waitlist" CTAs scroll to the form and focus the email field.
+  // They stay plain #waitlist links, so they also work without JS.
+  const goToWaitlist = (e) => {
+    e.preventDefault();
+    const section = document.getElementById("waitlist");
+    if (section && section.scrollIntoView) section.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (wlEmailRef.current) wlEmailRef.current.focus({ preventScroll: true });
+  };
 
   useEffect(() => {
     if (isWaitlistOnly()) return; // no /api/plans call in the waitlist-only build
@@ -88,19 +101,25 @@ export default function Landing() {
 
       {/* Nav */}
       <header className="sticky top-0 z-30 glass-crystal border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
           <Logo variant="light" />
           <nav className="hidden md:flex items-center gap-8 text-[13px] text-white/70">
             <a href="#features" className="hover:text-white">{t("landing.nav_features")}</a>
             <a href="#industries" className="hover:text-white">{t("landing.nav_industries")}</a>
-            <a href="#how" className="hover:text-white">{t("landing.nav_how")}</a>
+            {!waitlistOnly && <a href="#how" className="hover:text-white">{t("landing.nav_how")}</a>}
             {!waitlistOnly && <a href="#demo" className="hover:text-white">{t("landing.nav_demo")}</a>}
             {!waitlistOnly && <Link to="/pricing" className="hover:text-white">{t("landing.nav_pricing")}</Link>}
             <a href="#faq" className="hover:text-white">{t("landing.nav_faq")}</a>
           </nav>
-          <div className="flex items-center gap-2">
-            <LanguageSwitcher compact />
-            {/* TODO(WL-001, Brann): waitlist-only header CTA copy. */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* EMP-WL-016: the waitlist page is English-only for now, so no EN/ES switcher there. */}
+            {!waitlistOnly && <LanguageSwitcher compact />}
+            {/* EMP-WL-034: waitlist-only header CTA (existing "Join waitlist" label). */}
+            {waitlistOnly && (
+              <a href="#waitlist" onClick={goToWaitlist} data-testid="header-cta-waitlist">
+                <Button className="bg-white text-black hover:bg-white/90">{t("landing.cta_join_waitlist")}<ArrowRight className="h-4 w-4 ml-1" /></Button>
+              </a>
+            )}
             {!waitlistOnly && <Link to="/login"><Button variant="ghost" className="text-white hover:bg-white/10" data-testid="landing-login-btn">{t("common.login")}</Button></Link>}
             {!waitlistOnly && <Link to="/signup"><Button className="bg-white text-black hover:bg-white/90" data-testid="landing-signup-btn">{t("landing.cta_trial")}<ArrowRight className="h-4 w-4 ml-1" /></Button></Link>}
           </div>
@@ -108,19 +127,28 @@ export default function Landing() {
       </header>
 
       {/* Hero */}
-      <section className="relative max-w-7xl mx-auto px-6 pt-20 pb-20">
-        <div className="grid grid-cols-12 gap-6 items-start">
-          <div className="col-span-12 lg:col-span-7">
+      <section className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-16 sm:pt-20 pb-20">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="min-w-0 lg:col-span-7">
             <Badge className="bg-white/10 text-white/80 border border-white/15 mb-5 hover:bg-white/10">
               <Sparkles className="h-3 w-3 mr-1.5" /> {t("landing.badge_platform")}
             </Badge>
-            <h1 className="font-display text-5xl md:text-7xl leading-[0.95] tracking-tight text-white">
+            <h1 className="font-display text-4xl sm:text-5xl md:text-7xl leading-[0.95] tracking-tight text-white break-words">
               {t("landing.hero_title_lead")} <span className="text-white/60">{t("landing.hero_title_trail")}</span>
             </h1>
             <p className="mt-6 text-white/70 text-lg max-w-xl">
               {t("landing.hero_sub")}
             </p>
-            {/* TODO(WL-001, Brann): waitlist-only hero CTA copy (demo and trial buttons are hidden there). */}
+            {/* EMP-WL-034 / WL-001: waitlist-only hero CTA is the primary button (existing label). */}
+            {waitlistOnly && (
+              <div className="mt-8">
+                <a href="#waitlist" onClick={goToWaitlist} data-testid="hero-cta-waitlist">
+                  <Button className="h-12 px-6 bg-white text-black hover:bg-white/90 text-base">
+                    {t("landing.cta_join_waitlist")}<ArrowRight className="h-4 w-4 ml-1.5" />
+                  </Button>
+                </a>
+              </div>
+            )}
             {!waitlistOnly && <div className="mt-8 flex flex-wrap gap-3 items-center">
               <Link to="/signup">
                 <Button className="h-12 px-6 bg-white text-black hover:bg-white/90 text-base" data-testid="hero-cta-signup">
@@ -143,7 +171,7 @@ export default function Landing() {
               />
             )}
           </div>
-          <div className="col-span-12 lg:col-span-5">
+          <div className="min-w-0 lg:col-span-5">
             <HeroPreview />
           </div>
         </div>
@@ -184,8 +212,10 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* How it works */}
-      <section id="how" className="relative max-w-7xl mx-auto px-6 py-20">
+      {/* How it works. Hidden in the waitlist-only build: its steps describe self-serve signup
+          ("Sign up", "Create your workspace"), which that build doesn't offer (EMP-WL-001).
+          TODO(WL-001, Brann): waitlist-mode version of this section, if wanted. */}
+      {!waitlistOnly && <section id="how" className="relative max-w-7xl mx-auto px-6 py-20">
         <div className="overline text-white/60 mb-3">{t("landing.how_eyebrow")}</div>
         <h2 className="font-display text-4xl md:text-5xl text-white tracking-tight max-w-2xl">{t("landing.how_title")}</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-10">
@@ -198,12 +228,12 @@ export default function Landing() {
             </div>
           ))}
         </div>
-      </section>
+      </section>}
 
       {/* Live demo (hidden in the waitlist-only build: /api/public/demo/* returns 404 there) */}
       {!waitlistOnly && <section id="demo" className="relative max-w-7xl mx-auto px-6 py-20">
-        <div className="grid grid-cols-12 gap-6 items-start">
-          <div className="col-span-12 lg:col-span-5">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="min-w-0 lg:col-span-5">
             <div className="overline text-white/60 mb-3">{t("landing.demo_section_eyebrow")}</div>
             <h2 className="font-display text-4xl md:text-5xl text-white tracking-tight whitespace-pre-line">{t("landing.demo_section_title")}</h2>
             <p className="text-white/70 mt-5 max-w-md">
@@ -215,7 +245,7 @@ export default function Landing() {
               <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />{t("landing.demo_bullet_3")}</li>
             </ul>
           </div>
-          <div className="col-span-12 lg:col-span-7">
+          <div className="min-w-0 lg:col-span-7">
             <DemoCall />
           </div>
         </div>
@@ -239,16 +269,20 @@ export default function Landing() {
       </section>
 
       {/* Waitlist */}
-      <section id="waitlist" className="relative max-w-5xl mx-auto px-6 py-20">
-        <div className="glass-crystal rounded-3xl p-8 md:p-12 text-white grid grid-cols-12 gap-8 items-center">
-          <div className="col-span-12 md:col-span-6">
-            <div className="overline text-white/60 mb-3">{t("landing.waitlist_eyebrow")}</div>
-            <h2 className="font-display text-4xl tracking-tight">{t("landing.waitlist_title")}</h2>
+      {/* EMP-WL-006: one column on phones. The old grid-cols-12 + gap-8 kept 11 column gaps
+          (352 px) even with col-span-12, which pushed the form ~43 px past a 390 px screen. */}
+      <section id="waitlist" className="relative max-w-5xl mx-auto px-4 sm:px-6 py-20 scroll-mt-20">
+        <div className="glass-crystal rounded-3xl p-5 sm:p-8 md:p-12 text-white grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-center">
+          <div className="min-w-0 md:col-span-6">
+            {/* TODO(WL-034, Brann): waitlist-mode card overline. "Not ready to try?" refers to the
+                trial, which the waitlist build doesn't have, so it is hidden there; wording is Brann's. */}
+            {!waitlistOnly && <div className="overline text-white/60 mb-3">{t("landing.waitlist_eyebrow")}</div>}
+            <h2 className="font-display text-3xl sm:text-4xl tracking-tight break-words">{t("landing.waitlist_title")}</h2>
             <p className="text-white/70 mt-4">
               {t("landing.waitlist_sub")}
             </p>
           </div>
-          <div className="col-span-12 md:col-span-6">
+          <div className="min-w-0 md:col-span-6">
             {wlSent ? (
               <div className="rounded-xl bg-emerald-400/10 border border-emerald-300/20 p-6 text-emerald-100" data-testid="waitlist-success">
                 <div className="font-medium">{t("landing.waitlist_success_title")}</div>
@@ -256,8 +290,8 @@ export default function Landing() {
               </div>
             ) : (
               <form onSubmit={submitWaitlist} className="space-y-3" data-testid="waitlist-form">
-                <Input required type="email" placeholder={t("landing.waitlist_email_ph")} value={wlForm.email} onChange={(e) => setWlForm({ ...wlForm, email: e.target.value })} className="bg-white/5 border-white/20 text-white placeholder:text-white/40" data-testid="waitlist-email" />
-                <div className="grid grid-cols-2 gap-3">
+                <Input ref={wlEmailRef} required type="email" aria-label={t("landing.waitlist_email")} placeholder={t("landing.waitlist_email_ph")} value={wlForm.email} onChange={(e) => setWlForm({ ...wlForm, email: e.target.value })} className="bg-white/5 border-white/20 text-white placeholder:text-white/40" data-testid="waitlist-email" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input placeholder={t("landing.waitlist_name_ph")} value={wlForm.name} onChange={(e) => setWlForm({ ...wlForm, name: e.target.value })} className="bg-white/5 border-white/20 text-white placeholder:text-white/40" data-testid="waitlist-name" />
                   <Input placeholder={t("landing.waitlist_business_ph")} value={wlForm.business_name} onChange={(e) => setWlForm({ ...wlForm, business_name: e.target.value })} className="bg-white/5 border-white/20 text-white placeholder:text-white/40" data-testid="waitlist-biz" />
                 </div>
@@ -269,8 +303,10 @@ export default function Landing() {
                   <input id="wl-website" name="website" type="text" tabIndex={-1} autoComplete="off" value={wlForm.website} onChange={(e) => setWlForm({ ...wlForm, website: e.target.value })} />
                 </div>
                 <TurnstileWidget onToken={onTurnstileToken} />
-                <Button type="submit" disabled={wlSending || !wlForm.email} className="w-full h-11 bg-white text-black hover:bg-white/90" data-testid="waitlist-submit">
-                  {wlSending ? t("landing.waitlist_adding") : t("landing.waitlist_submit")}
+                {/* WL-001: the primary button. Not greyed out before an email is typed (looked broken);
+                    the required email field still blocks an empty submit. */}
+                <Button type="submit" disabled={wlSending} className="w-full h-11 bg-white text-black hover:bg-white/90" data-testid="waitlist-submit">
+                  {wlSending ? t("landing.waitlist_adding") : t("landing.cta_join_waitlist")}
                 </Button>
               </form>
             )}
