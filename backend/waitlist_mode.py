@@ -56,14 +56,15 @@ def build_waitlist_app(full_app: FastAPI) -> FastAPI:
     api.add_api_route("/public/waitlist", marketing.waitlist, methods=["POST"])
     app.include_router(api)
 
-    from waitlist_guard import WaitlistPostGuard
-    app.add_middleware(WaitlistPostGuard)
-
     cors = _cors_kwargs_from(full_app)
     if cors is not None:
         app.add_middleware(CORSMiddleware, **cors)
     else:
         log.error("WAITLIST_ONLY: no CORS middleware found on the full app; cross-origin calls will fail")
+
+    # Inside CORS, like the full app (EMP-WL-036): guard errors carry CORS headers for allowed origins.
+    from waitlist_guard import install_waitlist_guard
+    install_waitlist_guard(app)
 
     @app.on_event("shutdown")
     async def _shutdown():
