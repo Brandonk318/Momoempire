@@ -99,6 +99,7 @@ from fastapi.testclient import TestClient
 from fastapi.routing import APIRoute
 from starlette.routing import Mount
 out = {"startup_handlers": len(server.app.router.on_startup)}
+out["startup_names"] = [getattr(h, "__name__", "?") for h in server.app.router.on_startup]
 out["middleware"] = [m.cls.__name__ for m in server.app.user_middleware]
 routes = []
 for r in server.app.routes:
@@ -140,6 +141,13 @@ with TestClient(server.app, raise_server_exceptions=False) as c:   # runs startu
                         rr.headers.get("content-type"), rr.text]
     out["guard"] = g
     out["guard_cors"] = cors_h
+    pf = {}
+    for name, origin in {"good": "https://good.example", "evil": "https://evil.example"}.items():
+        rr = c.options("/api/public/waitlist", headers={"Origin": origin, "Access-Control-Request-Method": "POST",
+                                                         "Access-Control-Request-Headers": "content-type"})
+        pf[name] = [rr.status_code, rr.headers.get("access-control-allow-origin"),
+                    rr.headers.get("access-control-allow-credentials")]
+    out["preflight"] = pf
     res = {}
     for spec in paths:
         method, path = spec.split(" ", 1)
@@ -225,7 +233,8 @@ def test_everything_else_404(wl, spec):
 
 
 def test_no_seeding_or_startup_hooks(wl):
-    assert wl["startup_handlers"] == 0
+    # Only the waitlist unique-index build may run at startup (with PR #18; none before it).
+    assert set(wl["startup_names"]) <= {"_waitlist_startup"}
     assert wl["calls"] == {"seed": 0, "plans": 0}
 
 
@@ -339,6 +348,8 @@ def test_guard_runs_inside_cors(request, run):
     mw = request.getfixturevalue(run)["middleware"]
     assert "CORSMiddleware" in mw and "WaitlistPostGuard" in mw
     assert mw.index("WaitlistPostGuard") > mw.index("CORSMiddleware")  # later in the list = inner
+    # EMP-WL-052: the credentials-header filter must be OUTSIDE CORS to see its headers.
+    assert mw.index("DropOrphanCredentialsHeader") < mw.index("CORSMiddleware")
 
 
 @pytest.mark.parametrize("run", ["full_allowlist", "wl_allowlist"])
@@ -357,6 +368,13 @@ def test_guard_errors_readable_by_allowed_origin_only(request, run):
     # Success for the allowed origin still has it; no Origin header => no CORS header.
     assert h["json_good_origin"][0] == "https://good.example"
     assert h["text_plain"][0] is None
+    # EMP-WL-052: no Access-Control-Allow-Credentials without Allow-Origin (disallowed origins).
+    for name in ("json_evil_origin", "text_plain_evil_origin", "json_null_origin", "text_plain"):
+        assert h[name][1] is None, name
+    assert h["json_good_origin"][1] == "true"  # allowed origin keeps it
+    pf = r["preflight"]
+    assert pf["good"] == [200, "https://good.example", "true"]
+    assert pf["evil"][0] == 400 and pf["evil"][1] is None and pf["evil"][2] is None
 
 
 @pytest.mark.parametrize("run", ["full", "wl"])
@@ -396,5 +414,9 @@ def test_deploy_doc_fixes():
     for value in ("172.30.0.1", "127.0.0.1", "set_real_ip_from"):
         assert value in doc
     assert "Same-origin setups still need it" in doc
+    # EMP-WL-052 / WL-045
+    assert "**Use lower case (EMP-WL-052).**" in doc and "all lower case" in doc
+    assert "`WAITLIST_CONFIRMATION_EMAIL` | leave **unset**" in doc
+    assert "**confirmation email** (EMP-WL-008/009)" not in doc
     ex = (BACKEND / ".env.example").read_text()
     assert "enforces this at startup" not in ex and "still starts but fails closed" in ex

@@ -6,7 +6,7 @@ WAITLIST_ONLY=true makes `server:app` a minimal app that serves ONLY:
 Everything else (/docs, /redoc, /openapi.json, /api/auth/*, /api/admin/*, other /api/public/*,
 /api/cron/*, webhooks, ...) is 404. The full app's startup hook (admin/industry/plan seeding,
 index creation) is NOT run: it is attached to the full app object, which uvicorn never serves in
-this mode. Crons are HTTP-triggered (/api/cron/*), so they 404 here; there is no in-process scheduler.
+this mode; only the waitlist unique-index build (PR #18) runs at startup. Crons are HTTP-triggered (/api/cron/*), so they 404 here; there is no in-process scheduler.
 
 POST /api/public/waitlist is behind WaitlistPostGuard (waitlist_guard.py): JSON only (415) and,
 when CORS_ORIGINS is an allow-list, Origin must be on it (403). The full app gets the same guard.
@@ -44,10 +44,19 @@ def build_waitlist_app(full_app: FastAPI) -> FastAPI:
     app = FastAPI(title="Waitlist", docs_url=None, redoc_url=None, openapi_url=None)
     api = APIRouter(prefix="/api")
 
+    # EMP-WL-040 in waitlist mode (gap noted on PR #18): with PR #18's marketing.py, health reports
+    # "degraded" while the unique email index is missing, and the index is built at startup (same
+    # hook as the full app: retried, and the app refuses to start in production/staging if it
+    # fails). Looked up with getattr so this file also works before #18 is merged.
+    index_healthy = getattr(marketing, "waitlist_index_healthy", None)
+    waitlist_startup = getattr(marketing, "_waitlist_startup", None)
+
     @api.api_route("/health", methods=["GET", "HEAD"])  # HEAD for uptime monitors (EMP-WL-032)
     async def health():
         try:
             await get_db().command("ping")
+            if index_healthy is not None and not index_healthy():
+                return {"status": "degraded"}
             return {"status": "ok"}
         except Exception:
             log.exception("health: database ping failed")
@@ -65,6 +74,9 @@ def build_waitlist_app(full_app: FastAPI) -> FastAPI:
     # Inside CORS, like the full app (EMP-WL-036): guard errors carry CORS headers for allowed origins.
     from waitlist_guard import install_waitlist_guard
     install_waitlist_guard(app)
+
+    if waitlist_startup is not None:
+        app.add_event_handler("startup", waitlist_startup)  # no seeding: index build only
 
     @app.on_event("shutdown")
     async def _shutdown():
