@@ -280,12 +280,31 @@ async def owner_decision(qid: str, data: QuoteDecisionIn, user: dict = Depends(r
 
 
 # -------- Public quote endpoints (customer-facing) --------
+# EMP-W-CF-022: a draft is not public yet (same 404 as an unknown token), and expires_at is
+# enforced. TODO(Brann): expired quotes stay viewable (marked expired) but can't be accepted;
+# re-approving an expired quote does not extend expires_at.
+def _quote_expired(q: dict, now: datetime | None = None) -> bool:
+    raw = q.get("expires_at")
+    if not raw:
+        return False  # CRM estimates may have no expiry
+    try:
+        exp = raw if isinstance(raw, datetime) else datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return False  # unparseable legacy value: treat as no expiry rather than block the customer
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    return (now or datetime.now(timezone.utc)) >= exp
+
+
 @public_router.get("/quotes/{token}")
 async def public_quote(token: str):
     db = get_db()
     q = await db.estimates.find_one({"public_token": token}, {"_id": 0})
-    if not q:
+    if not q or q.get("status") == "draft":
         raise HTTPException(404, "Not found")
+    q["expired"] = _quote_expired(q)
+    q["can_accept"] = bool(q.get("owner_approved")) and not q["expired"] \
+        and q.get("status") not in ("declined", "approved", "accepted")
     # Hide owner's internal notes
     q.pop("notes", None)
     tenant = await db.tenants.find_one({"id": q["tenant_id"]}, {"_id": 0, "name": 1, "slug": 1, "stripe_connect_id": 1}) or {}
@@ -305,7 +324,7 @@ async def accept_quote(token: str, data: QuoteAcceptIn):
     Idempotent: a second accept returns the same invoice/appointment."""
     db = get_db()
     quote = await db.estimates.find_one({"public_token": token}, {"_id": 0})
-    if not quote:
+    if not quote or quote.get("status") == "draft":
         raise HTTPException(404, "Quote not found")
     if not quote.get("owner_approved"):
         raise HTTPException(400, "Quote not approved yet")
@@ -316,6 +335,8 @@ async def accept_quote(token: str, data: QuoteAcceptIn):
     existing_inv = await db.invoices.find_one({"quote_id": quote["id"]}, {"_id": 0})
     if existing_inv:
         return {"ok": True, "idempotent": True, "invoice": existing_inv}
+    if _quote_expired(quote):  # after the idempotent re-accept, which must keep working
+        raise HTTPException(400, "Quote has expired")
 
     now = _now_iso()
     # Create appointment (job)
