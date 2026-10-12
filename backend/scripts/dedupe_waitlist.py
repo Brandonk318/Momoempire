@@ -41,7 +41,7 @@ async def main(apply: bool) -> int:
         print("MONGO_URL and DB_NAME must be set", file=sys.stderr)
         return 2
     from motor.motor_asyncio import AsyncIOMotorClient
-    from routers.marketing import dedupe_waitlist
+    from routers.marketing import build_waitlist_unique_index, dedupe_waitlist
 
     client = AsyncIOMotorClient(os.environ["MONGO_URL"], serverSelectionTimeoutMS=5000)
     db = client[os.environ["DB_NAME"]]
@@ -50,10 +50,12 @@ async def main(apply: bool) -> int:
         index_ok = None
         if apply:
             try:
-                await db.waitlist.create_index("email", unique=True)
+                await build_waitlist_unique_index(db)  # same index spec as the app (EMP-WL-040)
                 index_ok = True
             except Exception as e:  # noqa: BLE001
-                print(f"unique index build failed: {e}", file=sys.stderr)
+                # Type only: the driver's E11000 text includes the duplicate email (no PII in output).
+                print(f"unique index build failed ({type(e).__name__}). If an older non-unique "
+                      "'email_1' index exists, drop it and run again.", file=sys.stderr)
                 index_ok = False
     finally:
         client.close()
