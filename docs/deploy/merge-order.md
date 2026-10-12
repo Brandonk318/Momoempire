@@ -59,6 +59,7 @@ none of them needs hand resolution (each merges cleanly onto the full stack):
 | #39 | Cloudflare-2 | any time (checked clean after #38 on the full stack: 392 backend; also clean with #7 and #9) | overdue reminders at most once per invoice per day, blocker 5, not waitlist (EMP-FIX-036) |
 | #40 | #7 | #7 (contains #7; updates #7's test fixtures; checked clean on the full stack + #37-#39: 419 backend) | Stripe Connect account/currency/amount checks, platform replay gate, no plan on "unpaid", not waitlist (EMP-FIX-037) |
 | #41 | #9 | #9 (contains #9; checked clean on the full stack + #37-#40: 436 backend, 197 Jest, both builds) | quote links: no dead Accept links, expiry enforced, drafts not public, not waitlist (EMP-FIX-038) |
+| #42 | Cloudflare-2 | any time (only the HEALTHCHECK lines; merges cleanly with #11, whose Dockerfile conflict is the start-line block) | Docker healthcheck passes on `status: ok`, not the `db` field #10 removed; degraded/DB down still unhealthy (EMP-FIX-039) |
 
 Full order as checked locally: #10, #8, #25, #11, #12, #29, #14, #18, #27, #33, #15, #13, #22,
 #30, #35, #17, #24, #36, #16, #19, #23, #28, #34, #20, #31, #21, #32, #26.
