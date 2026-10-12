@@ -244,7 +244,13 @@ def test_no_frontend_renders_waitlist_rows_as_html():
     # No admin/export view reads the waitlist today. If one is added, it must escape on output
     # (React text nodes do; dangerouslySetInnerHTML or raw CSV/HTML exports must not be used).
     src = Path(__file__).resolve().parents[2] / "frontend" / "src"
-    offenders = [p for p in src.rglob("*.js*") if "dangerouslySetInnerHTML" in p.read_text(errors="ignore")
+    # #2 (EMP-DEV-005) renders a bundled translation string as HTML on Landing.jsx (hero trial copy,
+    # `__html: t("landing....")`); that is not waitlist data, so only other __html sources count.
+    import re
+    def raw_html_uses(text):
+        uses = re.findall(r"dangerouslySetInnerHTML=\{\{\s*__html:\s*([^\n]*)", text)
+        return [u for u in uses if not u.lstrip().startswith('t("landing.')]
+    offenders = [p for p in src.rglob("*.js*") if raw_html_uses(p.read_text(errors="ignore"))
                  and "waitlist" in p.read_text(errors="ignore").lower()]
     assert offenders == []
 
