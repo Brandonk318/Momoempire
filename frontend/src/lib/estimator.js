@@ -30,6 +30,20 @@ export function validateAnswers(answers = {}, rules = ESTIMATOR_RULES) {
   return errors;
 }
 
+/** True when the AI-minutes need was estimated from calls because the answer was "Not sure". */
+export function aiMinutesEstimated(answers = {}, rules = ESTIMATOR_RULES) {
+  return answers.aiMinutesBand === rules.aiMinutesUnsureId && Number(rules.aiMinutesPerCallIfUnsure) > 0
+    && bandMax(rules.callBands, answers.callsBand) !== undefined;
+}
+
+function aiMinutesNeed(answers, rules) {
+  if (answers.aiMinutesBand !== rules.aiMinutesUnsureId) return bandMax(rules.aiMinutesBands, answers.aiMinutesBand);
+  // "Not sure": conservative floor from the call band (placeholder ratio), never ignored.
+  if (!aiMinutesEstimated(answers, rules)) return undefined;
+  const calls = bandMax(rules.callBands, answers.callsBand);
+  return calls === Infinity ? Infinity : Math.ceil(calls * Number(rules.aiMinutesPerCallIfUnsure));
+}
+
 /** Turn form answers into required capacity per metric (undefined = not asked/answered). */
 export function requirementsFrom(answers = {}, rules = ESTIMATOR_RULES) {
   const toInt = (v) => {
@@ -39,7 +53,7 @@ export function requirementsFrom(answers = {}, rules = ESTIMATOR_RULES) {
   return {
     calls: bandMax(rules.callBands, answers.callsBand),
     sms: bandMax(rules.smsBands, answers.smsBand),
-    ai_minutes: bandMax(rules.aiMinutesBands, answers.aiMinutesBand),
+    ai_minutes: aiMinutesNeed(answers, rules),
     locations: toInt(answers.locations),
     users: toInt(answers.users),
   };
@@ -69,6 +83,7 @@ export function matchPlan(answers, plans, rules = ESTIMATOR_RULES) {
   if (tiers.length === 0) {
     return { status: "unavailable", plan: null, exceeded: [], warnings: ["no_plan_data"] };
   }
+  if (aiMinutesEstimated(answers, rules)) warnings.push("ai_minutes_estimated");
   for (const key of rules.standardPlanKeys) {
     if (!tiers.find((p) => p.key === key)) warnings.push(`missing_plan:${key}`);
   }

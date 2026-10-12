@@ -2,7 +2,8 @@ import { useEffect, useRef } from "react";
 
 // Cloudflare Turnstile widget. Renders nothing unless REACT_APP_TURNSTILE_SITE_KEY is set at build
 // time. The backend only checks the token when TURNSTILE_ENABLED is on (off by default).
-const SITE_KEY = process.env.REACT_APP_TURNSTILE_SITE_KEY || "";
+// Read at render time (CRA still inlines it at build time) so tests can set it.
+const siteKey = () => process.env.REACT_APP_TURNSTILE_SITE_KEY || "";
 const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 
 function loadScript() {
@@ -21,10 +22,11 @@ function loadScript() {
   });
 }
 
-export const turnstileConfigured = !!SITE_KEY;
+export const turnstileConfigured = () => !!siteKey();
 
 export default function TurnstileWidget({ onToken }) {
   const ref = useRef(null);
+  const SITE_KEY = siteKey();
   useEffect(() => {
     if (!SITE_KEY) return undefined;
     let widgetId;
@@ -44,7 +46,7 @@ export default function TurnstileWidget({ onToken }) {
       cancelled = true;
       if (widgetId !== undefined && window.turnstile) window.turnstile.remove(widgetId);
     };
-  }, [onToken]);
+  }, [onToken, SITE_KEY]);
   if (!SITE_KEY) return null;
   return <div ref={ref} data-testid="waitlist-turnstile" />;
 }
