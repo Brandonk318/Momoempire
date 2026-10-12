@@ -30,7 +30,7 @@ from routers.portal import router as portal_router
 from routers.usage import router as usage_router
 from routers.scheduling import router as scheduling_router
 from routers.pipeline import router as pipeline_router
-from routers.knowledge_docs import router as knowledge_docs_router
+from routers.knowledge_docs import router as knowledge_docs_router, admin_router as knowledge_admin_router
 from routers.ai_quality import router as quality_router, admin_router as quality_admin_router
 from routers.automation_rules import router as automation_rules_router
 from routers.industry_intel import router as industry_intel_router
@@ -77,9 +77,13 @@ async def health():
     db = get_db()
     try:
         await db.command("ping")
-        return {"status": "ok", "db": "ok"}
-    except Exception as e:
-        return {"status": "degraded", "detail": str(e)}
+        from routers.marketing import waitlist_index_healthy  # EMP-WL-040: no unique email index
+        if not waitlist_index_healthy():
+            return {"status": "degraded"}
+        return {"status": "ok"}
+    except Exception:
+        logging.getLogger("aio").exception("health: database ping failed")
+        return {"status": "degraded", "detail": "service unavailable"}
 
 
 # Register feature routers
@@ -105,6 +109,7 @@ api.include_router(usage_router)
 api.include_router(scheduling_router)
 api.include_router(pipeline_router)
 api.include_router(knowledge_docs_router)
+api.include_router(knowledge_admin_router)
 api.include_router(quality_router)
 api.include_router(quality_admin_router)
 api.include_router(automation_rules_router)
@@ -144,22 +149,18 @@ api.add_api_route("/stripe/connect-webhook", _c2p_connect_wh, methods=["POST"], 
 app.include_router(api)
 
 
-# CORS: env-driven allow-list when CORS_ORIGINS is set; otherwise permissive (dev + Emergent preview).
-# For Cloudflare Pages / Oracle / Fly, set CORS_ORIGINS="https://your-pages.pages.dev,https://your-domain.com"
-_cors_env = os.environ.get("CORS_ORIGINS", "").strip()
-_cors_kwargs: dict = {
-    "allow_credentials": True,
-    "allow_methods": ["*"],
-    "allow_headers": ["*"],
-}
-if _cors_env and _cors_env != "*":
-    _cors_kwargs["allow_origins"] = [o.strip() for o in _cors_env.split(",") if o.strip()]
-else:
-    _cors_kwargs["allow_origin_regex"] = ".*"
-app.add_middleware(CORSMiddleware, **_cors_kwargs)
+# CORS: strict allow-list from CORS_ORIGINS via deploy_security (no regex fallback).
+# APP_ENV=production|staging with no valid allow-list fails closed (no cross-origin) and logs an error.
+from deploy_security import cors_options  # noqa: E402
+app.add_middleware(CORSMiddleware, **cors_options())
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("aio")
+
+# EMP-W-CF-023: cookie-authenticated POST/PUT/PATCH/DELETE must come from an allowed Origin
+# (or Referer). Webhooks, cron and the waitlist are exempt. See csrf_guard.py.
+from csrf_guard import CSRFOriginMiddleware  # noqa: E402
+app.add_middleware(CSRFOriginMiddleware)
 
 
 @app.on_event("startup")
@@ -190,8 +191,10 @@ async def shutdown():
 
 # EMP-WL-029: waitlist POST must be JSON (415) and, with a CORS_ORIGINS allow-list, from an
 # allowed Origin (403). Blocks cross-site text/plain signups. Keep when PR #11 merges.
-from waitlist_guard import WaitlistPostGuard  # noqa: E402
-app.add_middleware(WaitlistPostGuard)
+# EMP-WL-036: installed INSIDE CORSMiddleware so its 415/403 replies get CORS headers for allowed
+# origins (and none for disallowed ones). Don't switch this to app.add_middleware().
+from waitlist_guard import install_waitlist_guard  # noqa: E402
+install_waitlist_guard(app)
 
 # EMP-WL-002: WAITLIST_ONLY=true swaps in a minimal app (health + waitlist only; no seeding).
 from waitlist_mode import waitlist_only_enabled, build_waitlist_app  # noqa: E402
