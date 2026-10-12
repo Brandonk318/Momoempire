@@ -41,6 +41,8 @@ export default function Landing() {
   const [wlForm, setWlForm] = useState({ email: "", name: "", business_name: "", industry: "", note: "", website: "", turnstile_token: "" });
   const [wlSent, setWlSent] = useState(false);
   const [wlSending, setWlSending] = useState(false);
+  const [wlError, setWlError] = useState("");
+  const wlSuccessRef = useRef(null);
   // WL-027: the waitlist-only build hides the demo, trial, login and pricing (their APIs 404 there).
   const waitlistOnly = isWaitlistOnly();
   const wlEmailRef = useRef(null);
@@ -83,12 +85,21 @@ export default function Landing() {
   const submitWaitlist = async (e) => {
     e.preventDefault();
     setWlSending(true);
+    setWlError("");
     try {
       await api.post("/public/waitlist", wlForm);
       setWlSent(true); toast.success(t("landing.waitlist_thanks_toast"));
-    } catch (err) { toast.error(errMessage(err)); }
+    } catch (err) {
+      // EMP-WL-013: show the error next to the form (announced, linked to the email field)
+      // instead of only in a toast.
+      setWlError(errMessage(err));
+    }
     finally { setWlSending(false); }
   };
+
+  // EMP-WL-013: the form is replaced by the success message; move focus there so keyboard and
+  // screen-reader users aren't left on a removed element.
+  useEffect(() => { if (wlSent && wlSuccessRef.current) wlSuccessRef.current.focus(); }, [wlSent]);
 
   const trialLimits = trial?.limits || {};
   const trialDays = trial?.trial_days || 60;
@@ -179,7 +190,7 @@ export default function Landing() {
 
       {/* Features */}
       <section id="features" className="relative max-w-7xl mx-auto px-6 py-20">
-        <div className="overline text-white/60 mb-3">{t("landing.pillars_eyebrow")}</div>
+        <div className="overline text-white/70 mb-3">{t("landing.pillars_eyebrow")}</div>
         <h2 className="font-display text-4xl md:text-5xl text-white tracking-tight max-w-2xl">{t("landing.pillars_title")}</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-10">
           {PILLAR_META.map((p) => (
@@ -194,7 +205,7 @@ export default function Landing() {
 
       {/* Industries */}
       <section id="industries" className="relative max-w-7xl mx-auto px-6 py-20">
-        <div className="overline text-white/60 mb-3">{t("landing.industries_eyebrow")}</div>
+        <div className="overline text-white/70 mb-3">{t("landing.industries_eyebrow")}</div>
         <h2 className="font-display text-4xl md:text-5xl text-white tracking-tight max-w-2xl">{t("landing.industries_title")}</h2>
         <p className="text-white/70 mt-4 max-w-xl">{t("landing.industries_sub")}</p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-10">
@@ -216,12 +227,12 @@ export default function Landing() {
           ("Sign up", "Create your workspace"), which that build doesn't offer (EMP-WL-001).
           TODO(WL-001, Brann): waitlist-mode version of this section, if wanted. */}
       {!waitlistOnly && <section id="how" className="relative max-w-7xl mx-auto px-6 py-20">
-        <div className="overline text-white/60 mb-3">{t("landing.how_eyebrow")}</div>
+        <div className="overline text-white/70 mb-3">{t("landing.how_eyebrow")}</div>
         <h2 className="font-display text-4xl md:text-5xl text-white tracking-tight max-w-2xl">{t("landing.how_title")}</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-10">
           {STEP_META.map((s) => (
             <div key={s.n} className="glass-crystal rounded-2xl p-7 text-white" data-testid={`step-${s.n}`}>
-              <div className="font-mono text-white/40 text-sm">{s.n}</div>
+              <div className="font-mono text-white/60 text-sm">{s.n}</div>
               <div className="h-10 w-10 rounded-xl bg-white/10 border border-white/10 grid place-items-center mt-3 mb-4"><s.icon className="h-5 w-5" /></div>
               <h3 className="font-medium text-xl">{t(s.titleKey)}</h3>
               <p className="text-white/70 text-sm mt-2 leading-relaxed">{t(s.descKey)}</p>
@@ -234,8 +245,8 @@ export default function Landing() {
       {!waitlistOnly && <section id="demo" className="relative max-w-7xl mx-auto px-6 py-20">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           <div className="min-w-0 lg:col-span-5">
-            <div className="overline text-white/60 mb-3">{t("landing.demo_section_eyebrow")}</div>
-            <h2 className="font-display text-4xl md:text-5xl text-white tracking-tight whitespace-pre-line">{t("landing.demo_section_title")}</h2>
+            <div className="overline text-white/70 mb-3">{t("landing.demo_section_eyebrow")}</div>
+            <h2 className="font-display text-4xl md:text-5xl text-white tracking-tight">{t("landing.demo_section_title")}</h2>
             <p className="text-white/70 mt-5 max-w-md">
               {t("landing.demo_section_sub")}
             </p>
@@ -253,7 +264,7 @@ export default function Landing() {
 
       {/* FAQ */}
       <section id="faq" className="relative max-w-4xl mx-auto px-6 py-20">
-        <div className="overline text-white/60 mb-3">{t("landing.faq_eyebrow")}</div>
+        <div className="overline text-white/70 mb-3">{t("landing.faq_eyebrow")}</div>
         <h2 className="font-display text-4xl md:text-5xl text-white tracking-tight">{t("landing.faq_title")}</h2>
         <div className="mt-10 divide-y divide-white/10 border-y border-white/10">
           {faqs.map((f, i) => (
@@ -276,7 +287,7 @@ export default function Landing() {
           <div className="min-w-0 md:col-span-6">
             {/* TODO(WL-034, Brann): waitlist-mode card overline. "Not ready to try?" refers to the
                 trial, which the waitlist build doesn't have, so it is hidden there; wording is Brann's. */}
-            {!waitlistOnly && <div className="overline text-white/60 mb-3">{t("landing.waitlist_eyebrow")}</div>}
+            {!waitlistOnly && <div className="overline text-white/70 mb-3">{t("landing.waitlist_eyebrow")}</div>}
             <h2 className="font-display text-3xl sm:text-4xl tracking-tight break-words">{t("landing.waitlist_title")}</h2>
             <p className="text-white/70 mt-4">
               {t("landing.waitlist_sub")}
@@ -284,25 +295,43 @@ export default function Landing() {
           </div>
           <div className="min-w-0 md:col-span-6">
             {wlSent ? (
-              <div className="rounded-xl bg-emerald-400/10 border border-emerald-300/20 p-6 text-emerald-100" data-testid="waitlist-success">
+              <div ref={wlSuccessRef} tabIndex={-1} role="status" className="rounded-xl bg-emerald-400/10 border border-emerald-300/20 p-6 text-emerald-100 focus:outline-none" data-testid="waitlist-success">
                 <div className="font-medium">{t("landing.waitlist_success_title")}</div>
                 <div className="text-sm text-emerald-100/80 mt-1">{t("landing.waitlist_success_sub")}</div>
               </div>
             ) : (
               <form onSubmit={submitWaitlist} className="space-y-3" data-testid="waitlist-form">
-                <Input ref={wlEmailRef} required type="email" aria-label={t("landing.waitlist_email")} placeholder={t("landing.waitlist_email_ph")} value={wlForm.email} onChange={(e) => setWlForm({ ...wlForm, email: e.target.value })} className="bg-white/5 border-white/20 text-white placeholder:text-white/40" data-testid="waitlist-email" />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input placeholder={t("landing.waitlist_name_ph")} value={wlForm.name} onChange={(e) => setWlForm({ ...wlForm, name: e.target.value })} className="bg-white/5 border-white/20 text-white placeholder:text-white/40" data-testid="waitlist-name" />
-                  <Input placeholder={t("landing.waitlist_business_ph")} value={wlForm.business_name} onChange={(e) => setWlForm({ ...wlForm, business_name: e.target.value })} className="bg-white/5 border-white/20 text-white placeholder:text-white/40" data-testid="waitlist-biz" />
+                {/* EMP-WL-013: every field has a visible <label> (existing wording: the locale keys or the
+                    old placeholder text). Placeholders and borders meet contrast (scripts/waitlist-contrast.js, WaitlistA11y.test.js). */}
+                <div>
+                  <label htmlFor="wl-email" className="block text-sm text-white/80 mb-1.5">{t("landing.waitlist_email")}</label>
+                  <Input id="wl-email" ref={wlEmailRef} required type="email" autoComplete="email" placeholder={t("landing.waitlist_email_ph")} value={wlForm.email} onChange={(e) => setWlForm({ ...wlForm, email: e.target.value })} aria-invalid={wlError ? true : undefined} aria-describedby={wlError ? "wl-error" : undefined} className="bg-white/5 border-white/40 text-white placeholder:text-white/60" data-testid="waitlist-email" />
                 </div>
-                <Input placeholder={t("landing.waitlist_industry_ph")} value={wlForm.industry} onChange={(e) => setWlForm({ ...wlForm, industry: e.target.value })} className="bg-white/5 border-white/20 text-white placeholder:text-white/40" data-testid="waitlist-industry" />
-                <Textarea rows={2} placeholder={t("landing.waitlist_note_ph")} value={wlForm.note} onChange={(e) => setWlForm({ ...wlForm, note: e.target.value })} className="bg-white/5 border-white/20 text-white placeholder:text-white/40" data-testid="waitlist-note" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="wl-name" className="block text-sm text-white/80 mb-1.5">{t("landing.waitlist_name_ph")}</label>
+                    <Input id="wl-name" autoComplete="name" value={wlForm.name} onChange={(e) => setWlForm({ ...wlForm, name: e.target.value })} className="bg-white/5 border-white/40 text-white placeholder:text-white/60" data-testid="waitlist-name" />
+                  </div>
+                  <div>
+                    <label htmlFor="wl-biz" className="block text-sm text-white/80 mb-1.5">{t("landing.waitlist_business_ph")}</label>
+                    <Input id="wl-biz" autoComplete="organization" value={wlForm.business_name} onChange={(e) => setWlForm({ ...wlForm, business_name: e.target.value })} className="bg-white/5 border-white/40 text-white placeholder:text-white/60" data-testid="waitlist-biz" />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="wl-industry" className="block text-sm text-white/80 mb-1.5">{t("landing.waitlist_industry")}</label>
+                  <Input id="wl-industry" placeholder={t("landing.waitlist_industry_ph")} value={wlForm.industry} onChange={(e) => setWlForm({ ...wlForm, industry: e.target.value })} className="bg-white/5 border-white/40 text-white placeholder:text-white/60" data-testid="waitlist-industry" />
+                </div>
+                <div>
+                  <label htmlFor="wl-note" className="block text-sm text-white/80 mb-1.5">{t("landing.waitlist_note_ph")}</label>
+                  <Textarea id="wl-note" rows={2} value={wlForm.note} onChange={(e) => setWlForm({ ...wlForm, note: e.target.value })} className="bg-white/5 border-white/40 text-white placeholder:text-white/60" data-testid="waitlist-note" />
+                </div>
                 {/* Honeypot: hidden from people and screen readers; bots that fill it are silently ignored. */}
                 <div aria-hidden="true" style={{ position: "absolute", left: "-10000px", width: 1, height: 1, overflow: "hidden" }}>
                   <label htmlFor="wl-website">Website</label>
                   <input id="wl-website" name="website" type="text" tabIndex={-1} autoComplete="off" value={wlForm.website} onChange={(e) => setWlForm({ ...wlForm, website: e.target.value })} />
                 </div>
                 <TurnstileWidget onToken={onTurnstileToken} />
+                {wlError && <p id="wl-error" role="alert" className="text-sm text-rose-200" data-testid="waitlist-error">{wlError}</p>}
                 {/* WL-001: the primary button. Not greyed out before an email is typed (looked broken);
                     the required email field still blocks an empty submit. */}
                 <Button type="submit" disabled={wlSending} className="w-full h-11 bg-white text-black hover:bg-white/90" data-testid="waitlist-submit">
@@ -326,10 +355,10 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-2 md:grid-cols-4 gap-8 text-sm">
           <div>
             <Logo variant="light" />
-            <p className="mt-3 text-xs text-white/50 max-w-xs">{t("landing.footer_tagline")}</p>
+            <p className="mt-3 text-xs text-white/60 max-w-xs">{t("landing.footer_tagline")}</p>
           </div>
           <div>
-            <div className="overline text-white/50 mb-3">{t("landing.footer_product")}</div>
+            <div className="overline text-white/70 mb-3">{t("landing.footer_product")}</div>
             <ul className="space-y-2">
               <li><a href="#features" className="hover:text-white">{t("landing.nav_features")}</a></li>
               <li><a href="#industries" className="hover:text-white">{t("landing.nav_industries")}</a></li>
@@ -338,21 +367,21 @@ export default function Landing() {
             </ul>
           </div>
           <div>
-            <div className="overline text-white/50 mb-3">{t("landing.footer_company")}</div>
+            <div className="overline text-white/70 mb-3">{t("landing.footer_company")}</div>
             <ul className="space-y-2">
               <li><a href="#waitlist" className="hover:text-white">{t("landing.footer_early_access")}</a></li>
               <li><a href="mailto:hello@aioffice.io" className="hover:text-white">{t("landing.footer_contact")}</a></li>
             </ul>
           </div>
           <div>
-            <div className="overline text-white/50 mb-3">{t("landing.footer_legal")}</div>
+            <div className="overline text-white/70 mb-3">{t("landing.footer_legal")}</div>
             <ul className="space-y-2">
               <li><Link to="/privacy" className="hover:text-white" data-testid="footer-privacy-link">{t("landing.footer_privacy")}</Link></li>
               <li><Link to="/terms" className="hover:text-white" data-testid="footer-terms-link">{t("landing.footer_terms")}</Link></li>
             </ul>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto px-6 pb-8 text-[11px] text-white/40">© {new Date().getFullYear()} AI Office · {t("landing.footer_rights")}</div>
+        <div className="max-w-7xl mx-auto px-6 pb-8 text-[11px] text-white/60">© {new Date().getFullYear()} AI Office · {t("landing.footer_rights")}</div>
       </footer>
     </div>
   );

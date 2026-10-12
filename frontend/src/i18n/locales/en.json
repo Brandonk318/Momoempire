@@ -181,6 +181,7 @@
     "waitlist_name_ph": "Your name",
     "waitlist_business_ph": "Business",
     "waitlist_industry_ph": "Industry (e.g. HVAC, dental)",
+    "waitlist_industry": "Industry",
     "waitlist_note_ph": "Anything specific you'd want it to do?",
     "waitlist_submit": "Join waitlist",
     "waitlist_adding": "Adding…",

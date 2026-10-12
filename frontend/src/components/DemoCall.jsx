@@ -170,7 +170,7 @@ export default function DemoCall() {
             <Mic className="h-4 w-4 mr-1.5" />{t("landing.voice_talk_cta")}
           </Button>
         </div>
-        <p className="text-[11px] text-white/50 mt-3">{t("landing.voice_off_by_default_hint")}</p>
+        <p className="text-[11px] text-white/60 mt-3">{t("landing.voice_off_by_default_hint")}</p>
       </div>
     );
   }
@@ -213,7 +213,7 @@ export default function DemoCall() {
               </div>
               <p className="text-white/80">{t("landing.voice_speak_now")}</p>
               {voiceSecondsLeft != null && (
-                <p className="text-xs text-white/50 mt-2 font-mono" data-testid="demo-voice-countdown">
+                <p className="text-xs text-white/60 mt-2 font-mono" data-testid="demo-voice-countdown">
                   {t("landing.voice_seconds_left", { n: voiceSecondsLeft })}
                 </p>
               )}
@@ -294,7 +294,7 @@ export default function DemoCall() {
             <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder={t("landing.demo_say_something")} className="bg-white/5 border-white/20 text-white placeholder:text-white/40" data-testid="demo-input" aria-label={t("landing.demo_say_something")} />
             <Button type="submit" disabled={!input.trim() || sending} className="bg-white text-black hover:bg-white/90" data-testid="demo-send-btn" aria-label={t("landing.send")}><Send className="h-4 w-4" /></Button>
           </form>
-          <div className="text-[11px] text-white/50 mt-2">{t("landing.demo_turns_left", { n: turnsLeft })}</div>
+          <div className="text-[11px] text-white/60 mt-2">{t("landing.demo_turns_left", { n: turnsLeft })}</div>
         </>
       ) : (
         <div className="rounded-xl bg-white/5 border border-white/10 p-5 text-center">

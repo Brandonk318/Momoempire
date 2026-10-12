@@ -143,7 +143,7 @@ describe("waitlist landing UI (EMP-WL-006 / 034 / 016 / 001)", () => {
       await renderAt("/");
       expect(q('[data-testid="header-cta-waitlist"]').textContent).toBe("Join waitlist");
       expect(q('[data-testid="waitlist-submit"]').textContent).toBe("Join waitlist");
-      expect(q('[data-testid="waitlist-email"]').getAttribute("aria-label")).toBe("Email");
+      expect(q('label[for="wl-email"]').textContent).toBe("Email"); // EMP-WL-013: visible label replaces aria-label
     } finally {
       await act(async () => { await i18n.changeLanguage("en"); });
     }
@@ -174,7 +174,7 @@ describe("waitlist landing UI (EMP-WL-006 / 034 / 016 / 001)", () => {
     expect(card.className).toMatch(/\bmd:grid-cols-12\b/);
     expect(card.className).not.toMatch(/(^|\s)grid-cols-12\b/);
     expect(card.className).toMatch(/\bp-5\b/);
-    const nameRow = q('[data-testid="waitlist-name"]').parentElement;
+    const nameRow = q('[data-testid="waitlist-name"]').parentElement.parentElement; // field wrapper (label + input), then the row
     expect(nameRow.className).toMatch(/\bgrid-cols-1\b/);
     expect(nameRow.className).toMatch(/\bsm:grid-cols-2\b/);
     // No unprefixed 12-column grid anywhere in the waitlist page.
