@@ -9,7 +9,7 @@ API = f"{BASE_URL}/api"
 
 OWNER_EMAIL = "repeat-tester@example.com"
 OWNER_PASSWORD = "StrongPass123!"
-ADMIN_EMAIL = "ramonajefferson10@gmail.com"
+ADMIN_EMAIL = os.environ.get("ADMIN_TEST_EMAIL", "admin@example.test")  # WL-044: no personal address in the repo
 ADMIN_PASSWORD = "AdminPass123!"
 
 # Pull cron secret from env; fallback to the known test secret

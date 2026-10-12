@@ -10,7 +10,7 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://127.0.0.1:9").rstrip("/")  # WL-044: env only, never a deployment file or public server
 API = f"{BASE_URL}/api"
 
-ADMIN_EMAIL = "ramonajefferson10@gmail.com"
+ADMIN_EMAIL = os.environ.get("ADMIN_TEST_EMAIL", "admin@example.test")  # WL-044: no personal address in the repo
 ADMIN_PASSWORD = "AdminPass123!"
 
 
