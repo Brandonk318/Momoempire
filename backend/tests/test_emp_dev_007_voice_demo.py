@@ -108,7 +108,8 @@ def test_voice_token_refuses_sk_in_provider_response(client, monkeypatch):
 def test_voice_token_rate_limited(client, monkeypatch):
     monkeypatch.setenv("PUBLIC_VOICE_DEMO_ENABLED", "false")
     # Exhaust the shared IP limiter
-    with patch.object(m, "_RATE_LIMIT", 3), patch.object(m, "_IP_RATE", {}):
+    # #11 moved the shared demo limit into a SlidingLimiter (_DEMO_LIMIT, still 20/min/IP).
+    with patch.object(m, "_DEMO_LIMIT", m.SlidingLimiter(3, 60.0)):
         codes = []
         for _ in range(5):
             resp = client.post("/api/public/demo/voice-token", json={"industry": "hvac"})
