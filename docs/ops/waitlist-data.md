@@ -21,8 +21,17 @@ have `email_original`; archived rows also carry `duplicate_of` and `archived_at`
 
   On Atlas, create these as custom database roles ("Database Access → Custom Roles"). On
   self-hosted MongoDB, use `db.createRole` (example below) and `db.createUser`.
-- Keep the URI out of the command line, because `ps` and shell history can see it. Put it in `backend/.env`
-  (the script reads it there) or use `mongoexport --config <file>` with mode 0600.
+- **Never use the app's URI from `backend/.env` for this.** It holds the app's own read/write
+  credentials. The script no longer reads `backend/.env` at all (EMP-WL-074).
+- Keep the dedicated user's URI out of the command line, because `ps` and shell history can see it.
+  Put it in a private file outside the repo, e.g. `/secure/waitlist-ops.env` with mode 0600:
+  ```
+  MONGO_URL=mongodb+srv://waitlist_removal:<password>@<cluster-host>/?authSource=admin
+  DB_NAME=<DB_NAME>
+  ```
+  and pass `--env-file /secure/waitlist-ops.env` to the script (it refuses a file other users can
+  read). Use a separate file per user (export vs removal). For `mongoexport`, use
+  `--config <file>` with mode 0600. For mongosh, see the removal section (password prompt).
 - Export files contain personal data. Write them to an encrypted, access-controlled location,
   never into the repo, chat, email or a shared drive without Brann's OK. Delete them when the job is
   done. The script creates files with mode 0600 and refuses to overwrite.
@@ -54,9 +63,10 @@ Script (recommended: formula-safe CSV, allow-listed columns, dry run first):
 
 ```bash
 cd backend
-python scripts/waitlist_data.py export                                   # dry run: count + columns
-python scripts/waitlist_data.py export --out /secure/waitlist-$(date +%F).csv --apply
-python scripts/waitlist_data.py export --fields email,name --out /secure/wl.csv --apply
+E=/secure/waitlist-export.env   # 0600, the export user's URI (see Access controls)
+python scripts/waitlist_data.py export --env-file $E                                  # dry run: count + columns
+python scripts/waitlist_data.py export --env-file $E --out /secure/waitlist-$(date +%F).csv --apply
+python scripts/waitlist_data.py export --env-file $E --fields email,name --out /secure/wl.csv --apply
 ```
 
 - Default columns: `email,name,business_name,industry,created_at`. Allowed extras are `note`,
@@ -85,27 +95,45 @@ Script:
 
 ```bash
 cd backend
-python scripts/waitlist_data.py delete            # dry run: prompts for the email, prints match counts
-python scripts/waitlist_data.py delete --apply    # deletes from waitlist + waitlist_duplicates
+E=/secure/waitlist-ops.env   # 0600, the removal user's URI (see Access controls)
+python scripts/waitlist_data.py delete --env-file $E           # dry run: prompts for the email, prints match counts
+python scripts/waitlist_data.py delete --env-file $E --apply   # prints the counts, then asks you to type DELETE
 ```
-The `--apply` run prints the deleted counts and `remaining matches: 0`; it exits 1 if anything remains.
-To script it without a prompt: `printf '%s\n' "$EMAIL" | python scripts/waitlist_data.py delete --apply`
-(set `EMAIL` with `read -rs EMAIL`, not on the command line).
+- `--apply` shows the match counts first, then asks you to **type `DELETE`** on the terminal
+  (EMP-WL-075). Anything else deletes nothing (exit 3). With 0 matches it doesn't ask.
+- The run prints the deleted counts and `remaining matches: 0`; it exits 1 if anything remains.
+- To script it without a terminal: `printf '%s\n' "$EMAIL" | python scripts/waitlist_data.py delete --env-file $E --apply --confirm DELETE`
+  (set `EMAIL` with `read -rs EMAIL`, not on the command line). Only do this after a dry run with the same email.
+- TODO(Brann): a production check (e.g. refuse unless APP_ENV matches) and an audit record of
+  each removal (date, operator, request ID; no email) are not decided yet. Until then, note the
+  date and request ID in the removal log Brann keeps.
 
-mongosh alternative (the email comes from an env var, so it isn't in the command or history):
+mongosh alternative. Nothing secret goes on the command line: the dedicated removal user's URI
+**without the password** sits in a 0600 file, and mongosh asks for the password.
 
 ```bash
+# one-time: /secure/waitlist-removal.uri (chmod 600), one line, no password in it:
+#   mongodb+srv://<cluster-host>/<DB_NAME>?authSource=admin
 read -rs WL_EMAIL && export WL_EMAIL
-mongosh "$MONGO_URL/$DB_NAME" --quiet --eval '
-  const e = process.env.WL_EMAIL.trim().toLowerCase();
-  const re = new RegExp("^\\s*" + e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*$", "i");
-  const q = { $or: [ { email: e }, { email: re }, { email_original: re } ] };
-  print("waitlist", db.waitlist.countDocuments(q), "archive", db.waitlist_duplicates.countDocuments(q));
-  // after checking the counts, run again with the next two lines uncommented:
-  // print("deleted", db.waitlist.deleteMany(q).deletedCount, db.waitlist_duplicates.deleteMany(q).deletedCount);
-  // print("remaining", db.waitlist.countDocuments(q) + db.waitlist_duplicates.countDocuments(q));
-'
+mongosh --nodb --quiet --file /secure/waitlist-remove.js
 unset WL_EMAIL
+```
+
+`/secure/waitlist-remove.js` (chmod 600):
+
+```js
+const uri = require("fs").readFileSync("/secure/waitlist-removal.uri", "utf8").trim();
+const conn = new Mongo(uri);
+const authDb = conn.getDB("admin");
+authDb.auth("waitlist_removal", passwordPrompt());   // dedicated least-privilege user; password typed, not echoed
+const d = conn.getDB(uri.split("/").pop().split("?")[0]);
+const e = process.env.WL_EMAIL.trim().toLowerCase();
+const re = new RegExp("^\\s*" + e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*$", "i");
+const q = { $or: [ { email: e }, { email: re }, { email_original: re } ] };
+print("waitlist", d.waitlist.countDocuments(q), "archive", d.waitlist_duplicates.countDocuments(q));
+// after checking the counts, run again with the next two lines uncommented:
+// print("deleted", d.waitlist.deleteMany(q).deletedCount, d.waitlist_duplicates.deleteMany(q).deletedCount);
+// print("remaining", d.waitlist.countDocuments(q) + d.waitlist_duplicates.countDocuments(q));
 ```
 
 ### Copies outside the database (check them when someone asks to be removed)
