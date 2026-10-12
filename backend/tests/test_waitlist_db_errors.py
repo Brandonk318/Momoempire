@@ -121,10 +121,11 @@ def test_ten_signups_with_broken_db_store_nothing_and_never_say_success(env):
 
 
 def test_frontends_show_the_server_message():
-    # The landing form and the estimator show errMessage(err), i.e. the API's "detail" string.
+    # The landing form and the estimator show errMessage(err), i.e. the API's "detail" string, or
+    # (EMP-WL-064/071, PRs #28/#29) the translated/plain text with errMessage as the fallback.
     for rel in ("frontend/src/pages/Landing.jsx", "frontend/src/pages/Estimate.jsx"):
         src = (BACKEND.parent / rel).read_text()
-        assert "errMessage(err)" in src, rel
+        assert "errMessage(err)" in src or "waitlistErrorText(err, t, errMessage)" in src, rel
     api = (BACKEND.parent / "frontend/src/lib/api.js").read_text()
     assert "detail" in api
 
