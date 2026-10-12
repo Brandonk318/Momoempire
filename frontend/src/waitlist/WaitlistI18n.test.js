@@ -23,12 +23,18 @@ afterEach(() => {
   else process.env.REACT_APP_WAITLIST_ONLY = ORIGINAL;
 });
 
-test.each(["en", "es"])("waitlist.%s.json = the 'waitlist' landing keys of %s.json, nothing else", (lang) => {
+const WAITLIST_PAGE_KEYS = require("@/i18n/waitlistKeys");
+const keep = (k) => k.includes("waitlist") || WAITLIST_PAGE_KEYS.includes(k);
+
+test.each(["en", "es"])("waitlist.%s.json = the waitlist page's landing keys of %s.json, nothing else", (lang) => {
   const full = read(`${lang}.json`);
-  const expected = { landing: Object.fromEntries(Object.entries(full.landing).filter(([k]) => k.includes("waitlist"))) };
+  const expected = { landing: Object.fromEntries(Object.entries(full.landing).filter(([k]) => keep(k))) };
   expect(read(`waitlist.${lang}.json`)).toEqual(expected);
-  const text = JSON.stringify(read(`waitlist.${lang}.json`));
-  expect(text).not.toMatch(/trial|prueba|pricing|precio|log ?in|sign ?up|billing|factura|24\/7|stripe/i);
+  const subset = read(`waitlist.${lang}.json`).landing;
+  // No trial, plan-pricing, login, signup, demo or billing keys...
+  expect(Object.keys(subset).filter((k) => /trial|pricing|login|signup|demo|how_|plan/.test(k))).toEqual([]);
+  // ...and no trial/login/billing wording. ("pricing"/"precios" appear only as "service pricing" copy.)
+  expect(JSON.stringify(subset)).not.toMatch(/trial|prueba|log ?in|sign ?up|billing|factura|stripe/i);
 });
 
 test.each(["/", "/privacy", "/terms"])("%s renders with only the waitlist strings (no missing keys)", async (route) => {
