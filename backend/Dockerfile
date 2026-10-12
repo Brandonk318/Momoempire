@@ -33,8 +33,11 @@ USER app
 ENV PORT=8001
 EXPOSE 8001
 
+# Healthy only when /api/health answers 2xx with {"status": "ok"}. Since #10 the endpoint no longer
+# names the database: a failed DB ping returns {"status": "degraded"}, and a hung DB makes the 4 s
+# request time out. Both exit 1 (unhealthy), as does any HTTP error or unreachable server.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS http://localhost:${PORT}/api/health || exit 1
+    CMD python -c 'import json,os,sys,urllib.request; d=json.load(urllib.request.urlopen("http://localhost:"+os.getenv("PORT","8001")+"/api/health",timeout=4)); sys.exit(0 if d.get("status")=="ok" else 1)'
 
 # Single worker is fine for low usage; raise with --workers for busier hosts.
-CMD ["sh", "-c", "uvicorn server:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips='*'"]
+CMD ["sh", "-c", "uvicorn server:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips=\"${FORWARDED_ALLOW_IPS:-127.0.0.1}\""]
