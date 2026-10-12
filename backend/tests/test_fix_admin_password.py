@@ -25,6 +25,22 @@ STRONG = "Tr0ub4dor&Horse!"
 
 
 # ---------------- fake db ----------------
+def _bson(value):
+    """Store values like MongoDB does: aware datetimes come back NAIVE UTC (pymongo default,
+    tz_aware=False), millisecond precision. EMP-W-CF-026: the old fake kept them aware, which hid
+    the reset-password 500."""
+    from datetime import datetime, timezone
+    if isinstance(value, datetime):
+        if value.tzinfo is not None:
+            value = value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value.replace(microsecond=value.microsecond // 1000 * 1000)
+    if isinstance(value, dict):
+        return {k: _bson(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_bson(v) for v in value]
+    return value
+
+
 def _match(doc, q):
     return all(doc.get(k) == v for k, v in (q or {}).items())
 
@@ -53,12 +69,12 @@ class FakeColl:
         return _Cur()
 
     async def insert_one(self, doc):
-        self.docs.append(copy.deepcopy(doc))
+        self.docs.append(_bson(copy.deepcopy(doc)))
 
     async def update_one(self, q, upd, upsert=False):
         for d in self.docs:
             if _match(d, q):
-                d.update((upd or {}).get("$set") or {})
+                d.update(_bson((upd or {}).get("$set") or {}))
                 return
         if upsert:
             nd = dict(q); nd.update((upd or {}).get("$set") or {}); self.docs.append(nd)
@@ -289,8 +305,10 @@ def test_unusable_password_must_use_reset_flow(client, db, monkeypatch):
     assert client.get("/api/admin/stats", headers=h).status_code == 403
     # Reset-token flow works and clears both flags.
     from datetime import datetime, timedelta, timezone
+    # EMP-W-CF-026: a real datetime, stored like MongoDB stores it (comes back naive UTC).
     run(db.password_reset_tokens.insert_one({"token": "rt1", "user_id": adm["id"], "used": False,
-                                             "expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()}))
+                                             "expires_at": datetime.now(timezone.utc) + timedelta(hours=1)}))
+    assert db.password_reset_tokens.docs[0]["expires_at"].tzinfo is None
     assert client.post("/api/auth/reset-password", json={"token": "rt1", "new_password": STRONG}).status_code == 200
     adm = db.users.docs[0]
     assert adm["password_unusable"] is False and adm["must_change_password"] is False
@@ -338,3 +356,107 @@ def test_set_password_refuses_known_default_current_for_admin_with_live_token(cl
     r = client.post("/api/auth/set-password", json={"new_password": STRONG, "current_password": "AdminPass123!"}, headers=h)
     assert r.status_code == 403
     assert client.get("/api/admin/stats", headers=h).status_code == 403
+
+
+# ---------------- EMP-W-CF-026: reset-password with real datetimes ----------------
+def _reset_token(db, token, expires_at, user_id="adm"):
+    run(db.password_reset_tokens.insert_one({"token": token, "user_id": user_id, "used": False,
+                                             **({} if expires_at is None else {"expires_at": expires_at})}))
+
+
+@pytest.mark.parametrize("stored", ["aware", "naive", "iso", "iso_z"])
+def test_reset_password_accepts_every_stored_expiry_form(client, db, stored):
+    from datetime import datetime, timedelta, timezone
+    _seed_flagged_admin(db)
+    future = datetime.now(timezone.utc) + timedelta(hours=1)
+    value = {"aware": future, "naive": future.replace(tzinfo=None), "iso": future.isoformat(),
+             "iso_z": future.replace(tzinfo=None).isoformat() + "Z"}[stored]
+    _reset_token(db, "tok-" + stored, value)
+    r = client.post("/api/auth/reset-password", json={"token": "tok-" + stored, "new_password": STRONG})
+    assert r.status_code == 200, r.text
+    assert client.post("/api/auth/reset-password", json={"token": "tok-" + stored, "new_password": STRONG}).status_code == 400
+
+
+@pytest.mark.parametrize("value", ["past", "missing", "garbage"])
+def test_reset_password_expired_or_bad_expiry_is_400_not_500(client, db, value):
+    from datetime import datetime, timedelta, timezone
+    _seed_flagged_admin(db)
+    v = {"past": datetime.now(timezone.utc) - timedelta(minutes=1), "missing": None, "garbage": "not-a-date"}[value]
+    _reset_token(db, "old", v)
+    r = client.post("/api/auth/reset-password", json={"token": "old", "new_password": STRONG})
+    assert r.status_code == 400 and r.json()["detail"] == "Token expired"
+
+
+def test_forgot_then_reset_end_to_end(client, db):
+    _seed_flagged_admin(db)
+    adm = db.users.docs[0]
+    assert client.post("/api/auth/forgot-password", json={"email": adm["email"]}).status_code == 200
+    tok = db.password_reset_tokens.docs[-1]
+    assert tok["expires_at"].tzinfo is None  # as MongoDB returns it
+    r = client.post("/api/auth/reset-password", json={"token": tok["token"], "new_password": STRONG})
+    assert r.status_code == 200, r.text
+    assert client.post("/api/auth/login", json={"email": adm["email"], "password": STRONG}).status_code == 200
+
+
+def test_session_cookie_with_naive_expiry(client, db):
+    from datetime import datetime, timedelta, timezone
+    run(db.users.insert_one({"id": "u9", "email": "s@example.com", "role": "owner", "tenant_id": "t1",
+                             "password_hash": security.hash_password(STRONG), "must_change_password": False}))
+    run(db.user_sessions.insert_one({"user_id": "u9", "session_token": "live",
+                                     "expires_at": datetime.now(timezone.utc) + timedelta(days=1)}))
+    run(db.user_sessions.insert_one({"user_id": "u9", "session_token": "dead",
+                                     "expires_at": datetime.now(timezone.utc) - timedelta(days=1)}))
+    client.cookies.set("session_token", "live")
+    assert client.get("/api/auth/me").status_code == 200
+    client.cookies.set("session_token", "dead")
+    assert client.get("/api/auth/me").status_code == 401
+
+
+def test_as_utc_helper():
+    from datetime import datetime, timedelta, timezone
+    from timeutil import as_utc, is_expired
+    aware = datetime(2026, 10, 8, 12, tzinfo=timezone.utc)
+    assert as_utc(aware.replace(tzinfo=None)) == aware
+    assert as_utc(aware.astimezone(timezone(timedelta(hours=-5)))) == aware
+    assert as_utc("2026-10-08T12:00:00Z") == aware and as_utc("2026-10-08T12:00:00") == aware
+    assert as_utc("nope") is None and as_utc(None) is None and as_utc(123) is None
+    assert is_expired(None) and is_expired("garbage")
+    assert not is_expired(datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=5))
+
+
+# ---------------- EMP-W-CF-027: ADMIN_EMAIL clashes with an existing user ----------------
+@pytest.mark.parametrize("role", ["owner", "staff"])
+def test_seed_admin_email_clash_skips_and_leaves_user_alone(db, monkeypatch, caplog, role):
+    monkeypatch.setenv("ADMIN_PASSWORD", STRONG)
+    monkeypatch.setenv("ADMIN_EMAIL", "Taken@Example.com ")
+    user = {"id": "u-taken", "email": "taken@example.com", "role": role, "tenant_id": "t1",
+            "password_hash": security.hash_password("Their!Own!Pass123"), "must_change_password": False}
+    run(db.users.insert_one(user))
+    before = copy.deepcopy(db.users.docs)
+    with caplog.at_level("WARNING", logger="seed"):
+        run(seed_data.seed_admin())
+    assert db.users.docs == before  # not promoted, not modified, no second user
+    assert not any(d.get("role") == "platform_admin" for d in db.users.docs)
+    msg = " ".join(r.getMessage() for r in caplog.records)
+    assert "ADMIN_EMAIL matches an existing" in msg and "u-taken" in msg
+    assert "taken@example.com" not in msg.lower()  # id only, no address in the log
+
+
+def test_run_all_seeds_continues_after_admin_seed_problem(db, monkeypatch):
+    calls = []
+
+    async def boom():
+        raise RuntimeError("admin seed exploded")
+
+    async def rec(name):
+        calls.append(name)
+
+    async def noop():
+        return None
+
+    monkeypatch.setattr(seed_data, "ensure_indexes", noop)
+    monkeypatch.setattr(seed_data, "seed_admin", boom)
+    for name in ("seed_industries", "seed_countries", "seed_flags"):
+        monkeypatch.setattr(seed_data, name, lambda n=name: rec(n))
+    run(seed_data.run_all_seeds())
+    assert calls == ["seed_industries", "seed_countries", "seed_flags"]
