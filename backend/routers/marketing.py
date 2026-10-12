@@ -11,12 +11,17 @@ import json
 import logging
 import re
 import os
+import hashlib
+import httpx
+import sys
 import time
 from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
+from pymongo.errors import DuplicateKeyError
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, ValidationError, field_validator
 from typing import Literal, Optional
+import db as _db_module
 from db import get_db
 from models import _uuid, _now_iso
 from ai_receptionist import receptionist_reply
@@ -203,6 +208,154 @@ async def demo_turn(data: DemoTurnIn, request: Request):
     return {"reply": reply, "turns_used": sess["turns"], "turns_left": _MAX_TURNS - sess["turns"], "ended": False}
 
 
+
+
+def _public_voice_demo_enabled() -> bool:
+    return (os.environ.get("PUBLIC_VOICE_DEMO_ENABLED") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _voice_demo_max_seconds() -> int:
+    try:
+        return max(15, min(300, int(os.environ.get("PUBLIC_VOICE_DEMO_MAX_SECONDS") or "60")))
+    except ValueError:
+        return 60
+
+
+def _voice_instructions(preset: dict, lang: str) -> str:
+    """Ground the realtime voice session in the same industry preset as the text demo."""
+    is_es = (lang or "en").lower().startswith("es")
+    biz = preset["name"]
+    ai = preset["ai_employee"]["name"]
+    services = ", ".join(
+        f"{s['name']}" + (f" (${s['price']})" if s.get("price") else "")
+        for s in (preset.get("services") or [])[:6]
+    )
+    knowledge = "; ".join(
+        f"{k.get('question')}: {k.get('answer')}" for k in (preset.get("knowledge") or [])[:6]
+    )
+    if is_es:
+        return (
+            f"Eres {ai}, recepcionista AI de {biz}. Habla en español latinoamericano, claro y breve "
+            f"(1–3 oraciones). Ayuda a agendar, cotizar y responder preguntas frecuentes. "
+            f"Servicios: {services}. Conocimiento: {knowledge}. "
+            f"No inventes precios fuera de la lista. Si no sabes, ofrece transferir a un humano. "
+            f"Esta es una demo corta de marketing — sé amable y termina con una invitación a probar el plan gratis."
+        )
+    return (
+        f"You are {ai}, the AI receptionist for {biz}. Speak clearly and briefly (1–3 sentences). "
+        f"Help with booking, quotes, and FAQs. Services: {services}. Knowledge: {knowledge}. "
+        f"Do not invent prices outside the list. If unsure, offer to hand off to a human. "
+        f"This is a short marketing demo — be warm and end by inviting them to start a free trial."
+    )
+
+
+class DemoVoiceTokenIn(BaseModel):
+    industry: str = "hvac"
+    lang: str = "en"
+
+
+@router.post("/demo/voice-token")
+async def demo_voice_token(data: DemoVoiceTokenIn, request: Request):
+    """Mint a short-lived OpenAI Realtime ephemeral client secret for the public WebRTC demo.
+
+    OFF unless PUBLIC_VOICE_DEMO_ENABLED=true AND OPENAI_API_KEY is set.
+    Never returns the real API key — only an ephemeral `ek_…` client secret.
+    """
+    if not _ip_ok(request):
+        raise HTTPException(429, "Too many voice demo requests — slow down a bit.")
+
+    if not _public_voice_demo_enabled():
+        return {
+            "available": False,
+            "reason": "PUBLIC_VOICE_DEMO_ENABLED is off",
+            "fallback": "web-speech",
+        }
+
+    api_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+    if not api_key:
+        return {
+            "available": False,
+            "reason": "OPENAI_API_KEY not configured",
+            "fallback": "web-speech",
+        }
+
+    industry = (data.industry or "hvac").lower()
+    preset = INDUSTRY_PRESETS.get(industry) or INDUSTRY_PRESETS["hvac"]
+    lang = (data.lang or "en").lower()
+    model = (os.environ.get("PUBLIC_VOICE_DEMO_MODEL") or os.environ.get("OPENAI_REALTIME_MODEL") or "gpt-realtime").strip()
+    voice = (os.environ.get("PUBLIC_VOICE_DEMO_VOICE") or os.environ.get("OPENAI_REALTIME_VOICE") or "alloy").strip()
+    max_seconds = _voice_demo_max_seconds()
+    # Secret TTL slightly longer than session cap so clients can connect, then hang up by timer.
+    secret_ttl = max(60, min(600, max_seconds + 60))
+    instructions = _voice_instructions(preset, lang)
+
+    # Privacy-preserving safety identifier (hashed IP + industry), never the API key.
+    ip = (request.client.host if request.client else "unknown") or "unknown"
+    safety_id = hashlib.sha256(f"voice-demo:{ip}:{industry}".encode("utf-8")).hexdigest()[:32]
+
+    payload = {
+        "expires_after": {"anchor": "created_at", "seconds": secret_ttl},
+        "session": {
+            "type": "realtime",
+            "model": model,
+            "instructions": instructions,
+            "audio": {"output": {"voice": voice}},
+        },
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=20) as hc:
+            r = await hc.post(
+                "https://api.openai.com/v1/realtime/client_secrets",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "OpenAI-Safety-Identifier": safety_id,
+                },
+                json=payload,
+            )
+        if r.status_code >= 400:
+            return {
+                "available": False,
+                "reason": (r.text or "")[:200],
+                "fallback": "web-speech",
+            }
+        data_out = r.json() or {}
+    except Exception as e:
+        return {"available": False, "reason": str(e)[:200], "fallback": "web-speech"}
+
+    # OpenAI returns { value: "ek_…", expires_at: … } (and optionally nested session).
+    ephemeral = data_out.get("value") or (data_out.get("client_secret") or {}).get("value")
+    expires_at = data_out.get("expires_at") or (data_out.get("client_secret") or {}).get("expires_at")
+    if not ephemeral or not str(ephemeral).startswith("ek_"):
+        # Refuse anything that looks like a long-lived sk_ key
+        return {
+            "available": False,
+            "reason": "Ephemeral client secret missing from provider response",
+            "fallback": "web-speech",
+        }
+    if str(ephemeral).startswith("sk_"):
+        return {
+            "available": False,
+            "reason": "Refusing to return a non-ephemeral key",
+            "fallback": "web-speech",
+        }
+
+    return {
+        "available": True,
+        "value": ephemeral,
+        "expires_at": expires_at,
+        "model": model,
+        "voice": voice,
+        "max_duration_seconds": max_seconds,
+        "webrtc_url": "https://api.openai.com/v1/realtime/calls",
+        "business": preset["name"],
+        "ai_name": preset["ai_employee"]["name"],
+        "industry": industry,
+        "lang": lang,
+        "fallback": "web-speech",
+    }
+
 # ---------- Waitlist ----------
 # Its own limiter buckets (never shared with the AI demo). Defaults chosen by Momoempire Builder;
 # adjust freely, these are not product decisions.
@@ -211,6 +364,12 @@ _WAITLIST_IP_MINUTE = SlidingLimiter(5, 60.0)        # signups per IP per minute
 _WAITLIST_IP_HOUR = SlidingLimiter(30, 3600.0)       # signups per IP per hour
 _WAITLIST_INDEX_READY = False
 _WAITLIST_INDEX_LOCK = asyncio.Lock()
+# EMP-WL-040: None = not built yet, True = unique index in place, False = build failed (health
+# reports "degraded"; production refuses to start). Retry delays between build attempts (seconds).
+_WAITLIST_INDEX_OK: Optional[bool] = None
+_INDEX_RETRY_DELAYS = (0.5, 2.0)
+# EMP-WL-041: reply when the signup could not be saved (no internals, no PII).
+WAITLIST_UNAVAILABLE = "Sorry, we couldn't save your signup right now. Please try again in a few minutes."
 WAITLIST_DUPLICATES_COLLECTION = "waitlist_duplicates"  # archive for de-duplicated rows (never deleted)
 
 # Honeypot: a visually hidden input on the landing form that humans leave empty.
@@ -285,14 +444,31 @@ def normalize_email(value) -> str:
     return (value or "").strip().lower() if isinstance(value, str) else ""
 
 
-def _doc_time(doc) -> str:
-    """Sort key for 'earliest': created_at (ISO, UTC) else the ObjectId's creation time."""
-    ts = doc.get("created_at")
-    if isinstance(ts, str) and ts:
+_NEVER = datetime.max.replace(tzinfo=timezone.utc)
+
+
+def _as_utc(value) -> Optional[datetime]:
+    """created_at as an aware UTC datetime: BSON date (naive = UTC, as pymongo returns it), or an
+    ISO string (with Z, an offset, or naive = UTC). None if missing or unparseable."""
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+    if isinstance(value, str) and value.strip():
+        try:
+            dt = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    return None
+
+
+def _doc_time(doc) -> datetime:
+    """Sort key for 'earliest' (EMP-WL-042): created_at as a real datetime or an ISO string, else
+    the ObjectId's creation time, else last. Compared as datetimes, so mixed formats sort right."""
+    ts = _as_utc(doc.get("created_at"))
+    if ts is not None:
         return ts
-    oid = doc.get("_id")
-    gen = getattr(oid, "generation_time", None)
-    return gen.isoformat() if gen is not None else "9999"
+    gen = getattr(doc.get("_id"), "generation_time", None)
+    return _as_utc(gen) if gen is not None else _NEVER
 
 
 async def dedupe_waitlist(db, apply: bool = True) -> dict:
@@ -349,20 +525,66 @@ async def _ensure_waitlist_index(db) -> None:
     Runs at app startup (router startup hook) and again lazily before the first signup if that
     didn't complete (e.g. the DB wasn't reachable at boot, or the WL-002 waitlist-only app).
     """
-    global _WAITLIST_INDEX_READY
+    global _WAITLIST_INDEX_READY, _WAITLIST_INDEX_OK
     if _WAITLIST_INDEX_READY:
         return
     async with _WAITLIST_INDEX_LOCK:
         if _WAITLIST_INDEX_READY:
             return
-        await dedupe_waitlist(db, apply=True)  # DB errors propagate: retried on the next call
-        try:
-            await db.waitlist.create_index("email", unique=True)
-        except Exception:
-            # Rows inserted between the scan and the build can still collide; the upsert and the
-            # atomic confirmation claim keep signups correct, and the next process start retries.
-            log.error("waitlist: could not build unique email index after dedupe", exc_info=True)
+        # EMP-WL-040: retry briefly (re-running the dedupe, in case a row arrived between the scan
+        # and the build), then fail LOUDLY: health says "degraded" and production won't start.
+        attempts = len(_INDEX_RETRY_DELAYS) + 1
+        last = None
+        for attempt in range(attempts):
+            await dedupe_waitlist(db, apply=True)  # DB errors propagate: retried on the next call
+            try:
+                await build_waitlist_unique_index(db)
+                _WAITLIST_INDEX_OK = True
+                break
+            except Exception as e:  # noqa: BLE001 - reported below without the error text (may hold an email)
+                last = e
+                log.warning("waitlist: unique email index build failed (attempt %d/%d: %s)",
+                            attempt + 1, attempts, type(e).__name__)
+                if attempt < attempts - 1:
+                    await asyncio.sleep(_INDEX_RETRY_DELAYS[attempt])
+        else:
+            _WAITLIST_INDEX_OK = False
+            log.critical(
+                "waitlist: NO unique email index (%s). Duplicate signups are possible and /api/health "
+                "reports 'degraded'. Usual causes: an existing non-unique 'email_1' index (drop it), or "
+                "duplicates the dedupe can't resolve. Run backend/scripts/dedupe_waitlist.py and restart.",
+                type(last).__name__)
         _WAITLIST_INDEX_READY = True
+
+
+async def build_waitlist_unique_index(db) -> None:
+    """Unique index on the normalized email; raises if it can't be in place. Shared with
+    scripts/dedupe_waitlist.py. Unique only for real (non-empty string) emails, so legacy rows with
+    no email or "" can't block it (Watcher: two rows without an email gave E11000). A unique
+    email_1 that already exists (e.g. built by PR #11) is kept; a NON-unique one is never dropped
+    automatically, it fails instead."""
+    existing = (await _index_info(db)).get("email_1")
+    if existing is None:
+        await db.waitlist.create_index("email", unique=True, partialFilterExpression={"email": {"$gt": ""}})
+    elif not existing.get("unique"):
+        raise RuntimeError("existing non-unique email_1 index")
+
+
+async def _index_info(db) -> dict:
+    """Existing indexes; {} if they can't be listed (create_index then reports any real problem)."""
+    try:
+        return await db.waitlist.index_information() or {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def waitlist_index_healthy() -> bool:
+    """False only after the unique-index build has failed (EMP-WL-040). Used by /api/health."""
+    return _WAITLIST_INDEX_OK is not False
+
+
+def _strict_env() -> bool:
+    return (os.environ.get("APP_ENV") or "development").strip().lower() in ("production", "staging")
 
 
 @router.on_event("startup")
@@ -370,7 +592,11 @@ async def _waitlist_startup() -> None:
     try:
         await _ensure_waitlist_index(get_db())
     except Exception:
+        # DB unreachable at boot: not an index problem; retried before the first signup.
         log.warning("waitlist: startup dedupe/index skipped (will retry on first signup)", exc_info=True)
+    if _WAITLIST_INDEX_OK is False and _strict_env():
+        raise RuntimeError("Refusing to start: the waitlist unique email index could not be built "
+                           "(see the CRITICAL log line above). APP_ENV=" + (os.environ.get("APP_ENV") or ""))
 
 
 def turnstile_enabled() -> bool:
@@ -390,18 +616,39 @@ def check_turnstile_config() -> None:
         raise RuntimeError(msg)
 
 
-def check_single_worker() -> None:
+def _int(raw) -> int:
+    try:
+        return int(str(raw).strip())
+    except (TypeError, ValueError):
+        return 1
+
+
+def configured_workers(argv=None, env=None) -> tuple[int, str]:
+    """Worker count from the command line (`--workers N` / `--workers=N`, EMP-WL-043), then
+    UVICORN_WORKERS, then WEB_CONCURRENCY. With --workers, uvicorn's worker processes get the
+    parent's argv, so each worker sees the flag when it imports the app."""
+    argv = sys.argv if argv is None else argv
+    env = os.environ if env is None else env
+    for i, arg in enumerate(argv):
+        if arg == "--workers" and i + 1 < len(argv):
+            return _int(argv[i + 1]), f"--workers {argv[i + 1]}"
+        if arg.startswith("--workers="):
+            return _int(arg.split("=", 1)[1]), arg
+    for name in ("UVICORN_WORKERS", "WEB_CONCURRENCY"):
+        raw = (env.get(name) or "").strip()
+        if raw:
+            return _int(raw), f"{name}={raw}"
+    return 1, ""
+
+
+def check_single_worker(argv=None, env=None) -> None:
     """EMP-WL-021: the waitlist/demo limiters live in process memory. More than one worker
     multiplies the limits (2 workers let 7 of 12 through instead of 5). Warn loudly."""
-    raw = (os.environ.get("WEB_CONCURRENCY") or "").strip()
-    try:
-        workers = int(raw) if raw else 1
-    except ValueError:
-        workers = 1
+    workers, source = configured_workers(argv, env)
     if workers > 1:
-        log.error("WEB_CONCURRENCY=%s: the waitlist and demo rate limits are per process, so each worker "
+        log.error("%s: the waitlist and demo rate limits are per process, so each worker "
                   "allows its own quota. Run ONE worker for the waitlist deploy "
-                  "(docs/deploy/client-ip-and-proxies.md, 'One worker').", raw)
+                  "(docs/deploy/client-ip-and-proxies.md, 'One worker').", source)
 
 
 async def verify_turnstile(token: str, remote_ip: str) -> bool:
@@ -450,6 +697,14 @@ async def _send_waitlist_confirmation(email: str) -> None:
         log.exception("waitlist: confirmation email failed")
 
 
+def _signup_db():
+    """EMP-WL-061: the signup path uses the short-timeout client (db.get_waitlist_db). If get_db
+    has been swapped (tests, or another app wiring in its own DB), that one is used as is."""
+    if getattr(get_db, "app_default", False):
+        return _db_module.get_waitlist_db()
+    return get_db()
+
+
 @router.post("/waitlist")
 async def waitlist(request: Request, background: BackgroundTasks):
     ip = client_ip(request)
@@ -477,8 +732,12 @@ async def waitlist(request: Request, background: BackgroundTasks):
         if not await verify_turnstile(token if isinstance(token, str) else "", ip):
             raise HTTPException(400, "Verification failed. Please refresh the page and try again.")
 
-    db = get_db()
-    await _ensure_waitlist_index(db)
+    db = _signup_db()
+    try:
+        await _ensure_waitlist_index(db)
+    except Exception as e:  # DB unreachable: say so instead of pretending (EMP-WL-041)
+        log.error("waitlist: database unavailable, signup not saved (%s)", type(e).__name__)
+        raise HTTPException(503, WAITLIST_UNAVAILABLE)
     email = normalize_email(data.email)
     now = _now_iso()
     doc = {
@@ -492,10 +751,22 @@ async def waitlist(request: Request, background: BackgroundTasks):
     }
     inserted = False
     try:
-        res = await db.waitlist.update_one({"email": email}, {"$setOnInsert": doc}, upsert=True)
+        # EMP-WL-062: "$inc" makes a repeat signup a real write too. With only "$setOnInsert", an
+        # existing email was a no-op match, so a DB state that blocks inserts but not matches
+        # (e.g. a schema validator) answered 200 for a known email and 503 for a new one, which
+        # told an attacker the address was on the list. Now both paths write and fail alike.
+        # signup_count is internal (never exported, never shown); nothing the visitor sent is
+        # overwritten (CF-029/031).
+        res = await db.waitlist.update_one(
+            {"email": email}, {"$setOnInsert": doc, "$inc": {"signup_count": 1}}, upsert=True)
         inserted = getattr(res, "upserted_id", None) is not None
-    except Exception:  # duplicate-key race on the unique index = already on the list
+    except DuplicateKeyError:  # concurrent signup won the race on the unique index = already on the list
         log.info("waitlist: concurrent duplicate signup ignored")
+    except Exception as e:
+        # EMP-WL-041: any OTHER database error means nothing was saved. Never report success.
+        # Logged by type only: driver messages can echo the document (and so the email).
+        log.error("waitlist: database error, signup not saved (%s)", type(e).__name__)
+        raise HTTPException(503, WAITLIST_UNAVAILABLE)
 
     # Repeat signup (EMP-W-CF-029 / CF-031): never overwrite what the first signup stored, since
     # anyone who knows an address could otherwise change that person's row. Only fill fields that
