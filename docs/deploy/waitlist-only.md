@@ -26,6 +26,8 @@ What you get:
 |---|---|---|---|
 | Cloudflare Pages build env (Production) | `REACT_APP_WAITLIST_ONLY` | `true` | Builds the waitlist-only app. Read at **build** time, so changing it needs a rebuild. |
 | Cloudflare Pages build env (Production) | `REACT_APP_BACKEND_URL` | the backend's HTTPS origin, e.g. `https://api.example.com` | Where the form posts. Build time. |
+| Cloudflare Pages build env (Production) | `GENERATE_SOURCEMAP` | `false` | No source maps in the public build: they expose the original source and comments (EMP-WL-073). With PR #31 the waitlist build forces this anyway; set it so the intent is visible in Pages. Build time. |
+| Cloudflare Pages build env (Production) | `REACT_APP_SITE_NAME`, `REACT_APP_SITE_DESCRIPTION`, `REACT_APP_SITE_URL`, `REACT_APP_OG_IMAGE_URL` | **TODO(Brann):** brand name, description, the public https URL, share image URL | Page title, description, Open Graph/Twitter tags, canonical link, `robots.txt` Sitemap line and `sitemap.xml` (PR #20, #31). Unset keeps the placeholder title "Empire AI Office" and builds no sitemap. Both URLs must be absolute https or the build fails. Details: `site-metadata.md` (from #20). Build time. |
 | Backend env (`backend/.env`) | `WAITLIST_ONLY` | `true` | Minimal API (health + waitlist only). |
 | Backend env | `CORS_ORIGINS` | the exact frontend origins, comma-separated, e.g. `https://<project>.pages.dev,https://www.example.com` | **Required**, including for a same-origin setup (see below). Every hostname needs its own entry (Pages URL, apex, www). No paths, https only, **all lower case** (see "Use lower case" below). What happens without it is described under "CORS_ORIGINS" below. |
 | Backend env | `APP_ENV` | `production` | With PR #10: strict CORS (https only, explicit origins, fail closed). Without #10 it has no effect on CORS. |
@@ -33,8 +35,18 @@ What you get:
 | Backend env | `WAITLIST_CONFIRMATION_EMAIL` | leave **unset** (or `false`) | Needs #15. Unset means **off**: no confirmation email is sent, queued or logged. Only `1`/`true`/`yes`/`on` turns it on. Don't turn it on for launch: the email template still mentions a free trial and links aioffice.io pricing (EMP-WL-004/009, Brann decides). (EMP-WL-045) |
 | Backend env | `MONGO_URL`, `DB_NAME` | as for any deploy | Where waitlist signups are stored. `JWT_SECRET` isn't used by the two served routes, but keep the usual value. |
 
-Optional (needs #11): `TURNSTILE_ENABLED`, `TURNSTILE_SECRET_KEY` and the frontend's
-`REACT_APP_TURNSTILE_SITE_KEY`.
+**Turnstile (optional, needs #11; turning it on is EMP-WL-091, Brann's call).** It has two
+switches, one per side, and they must be **switched together**:
+
+| Side | Variables | Notes |
+|---|---|---|
+| Backend env | `TURNSTILE_ENABLED=true`, `TURNSTILE_SECRET_KEY` | Restart. Enabled without a secret refuses to start. |
+| Cloudflare Pages build env | `REACT_APP_TURNSTILE_ENABLED=true`, `REACT_APP_TURNSTILE_SITE_KEY` | Rebuild. Enabled without a site key fails the build. `false` hides the widget. |
+
+Backend on with the frontend off (or **unset with no site key**, which shows no widget) means
+every signup gets 400. Frontend on with the backend off shows the widget, but the token isn't
+checked. The frontend can't see the backend setting, so check both before each deploy. Details:
+`client-ip-and-proxies.md` (from #11).
 
 ### CORS_ORIGINS: what actually happens (EMP-WL-035)
 The server **starts** in every case below; nothing here stops startup.
@@ -80,7 +92,17 @@ the Nginx block: `client-ip-and-proxies.md` (from #11).
      `{"status":"degraded"}` means the database ping failed or (with #18) the unique email index
      couldn't be built: see `client-ip-and-proxies.md`, "Unique email index and the dedupe script".
      With #18 the waitlist app builds that index at startup and, with `APP_ENV=production`, refuses
-     to start if it can't.
+     to start if it can't **while the database is reachable**. If the database is **down at boot**,
+     the app starts anyway: health says `degraded`, signups get 503 (in seconds with #27, about
+     30 s without), and the index is built on the first signup once the database is back.
+   - **If the app refuses to start with the CRITICAL "NO unique email index" log**, the usual cause is an old
+     non-unique `email_1` index. It is never dropped automatically. Drop it yourself as a DB admin,
+     connecting with a password prompt (not a URI with a password on the command line), e.g.
+     `mongosh "mongodb+srv://<cluster-host>/<DB_NAME>" --username <admin-user>` then
+     `db.waitlist.dropIndex("email_1")`. If the log mentions duplicates, run
+     `python scripts/dedupe_waitlist.py` (counts) and then `--apply` first (see
+     `client-ip-and-proxies.md`, "Unique email index and the dedupe script"). Then restart and
+     re-check health.
    - `curl -i https://API/docs` and `curl -i https://API/api/auth/me` give 404.
    - `curl -i -X POST https://API/api/public/waitlist -H 'Content-Type: text/plain' -d '{}'` gives 415.
    - `curl -i -X OPTIONS https://API/api/public/waitlist -H 'Origin: https://evil.example' -H 'Access-Control-Request-Method: POST'`
@@ -92,8 +114,10 @@ the Nginx block: `client-ip-and-proxies.md` (from #11).
    - Send one real signup through the proxy and check the stored waitlist `ip` is your own IP, not
      the proxy's (confirms `FORWARDED_ALLOW_IPS`).
 3. **Cloudflare Pages project** (existing build settings from `docs/cloudflare/frontend-build.md`:
-   root `frontend`, command `yarn build` or `npx craco build`, output `build`). Add the two
-   `REACT_APP_*` variables to the **Production** environment and build. The SPA fallback (all paths
+   root `frontend`, command `yarn build` or `npx craco build`, output `build`). Add the Pages
+   variables from Settings (`REACT_APP_WAITLIST_ONLY`, `REACT_APP_BACKEND_URL`,
+   `GENERATE_SOURCEMAP`, the `REACT_APP_SITE_*` ones and, if Turnstile is on, its two) to the
+   **Production** environment and build. The SPA fallback (all paths
    serve `index.html`) is Pages' default for a project with no `404.html`.
 4. **Frontend checks:**
    - `/` shows the landing page and the waitlist form.
@@ -101,15 +125,23 @@ the Nginx block: `client-ip-and-proxies.md` (from #11).
    - There are no Live demo, Try it free, Log in or Pricing buttons.
    - The browser devtools Network tab shows no `/api/plans` call.
    - Submit a test address and check it's stored once (`db.waitlist`).
+   - No source maps: the Pages build log / output has no `.map` files, and the deployed
+     `static/js/main.*.js` has no `sourceMappingURL` line. (A request for a `.map` URL returns
+     `index.html` through the SPA fallback, so a 200 there does not mean a map shipped.)
+   - View source: the `<title>` and `og:*` tags show the `REACT_APP_SITE_*` values, not "Empire AI Office".
 5. **Rollback:** unset `REACT_APP_WAITLIST_ONLY` (rebuild) and `WAITLIST_ONLY` (restart) to get the
    full app back. Only do that if Brann picks route B, after PRs #7, #8 and #10 are merged.
 
-## Known gaps (not fixed by this PR)
+## Known gaps (not fixed by #13 or its follow-ups)
 - **Landing copy and CTA** (EMP-WL-001): `TODO(WL-001, Brann)` slots mark where waitlist-mode copy
   goes.
-- **Contact addresses and brand** (EMP-WL-004/005), **mobile overflow** (EMP-WL-006),
-  **consent** (EMP-WL-010) and **claims** (EMP-WL-011).
+- **Contact addresses and brand** (EMP-WL-004/005), **consent** (EMP-WL-010) and **claims**
+  (EMP-WL-011). Mobile overflow (EMP-WL-006) is fixed by #16/#19 (Watcher's final QC: no horizontal
+  overflow at 360/390/414 px).
+- **Legal TODO boxes** on /terms and /privacy (EMP-WL-080, Brann/counsel).
 - **Confirmation email:** off by default with #15 (`WAITLIST_CONFIRMATION_EMAIL`, see Settings).
   Whether to send one, and its wording, is EMP-WL-009 (Brann decides).
+- **Docker HEALTHCHECK** times out at 5 s; with the database down, health takes about 30 s, so the
+  container still reports unhealthy, which is the right result (Watcher's note g).
 - **Cost (estimate):** $0 on Cloudflare Pages' free plan (developers.cloudflare.com/pages/platform/limits).
   The backend host and domain aren't priced here; Brann decides.
