@@ -1,6 +1,8 @@
 // craco.config.js
 const path = require("path");
 require("dotenv").config();
+// EMP-WL-023: fail fast if Turnstile is enabled for the build without a site key.
+require("./turnstile-env").assertTurnstileBuildEnv();
 
 // EMP-WL-073: the waitlist-only build never ships source maps (they exposed the original source
 // and comments). Set before react-scripts reads GENERATE_SOURCEMAP; forced, so a stray
