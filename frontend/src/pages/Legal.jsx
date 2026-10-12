@@ -16,6 +16,24 @@ function TodoSlot({ id, what }) {
   );
 }
 
+// EMP-WL-082: "Last updated" is a fixed value set at build time, never today's date (which made
+// every visit look like a fresh policy change). TODO(Brann): set REACT_APP_LEGAL_LAST_UPDATED to
+// the real date the policies take effect; until then a visible TODO slot is shown.
+function LastUpdated() {
+  const value = (process.env.REACT_APP_LEGAL_LAST_UPDATED || "").trim();
+  return (
+    <p className="text-xs text-muted-foreground" data-testid="legal-last-updated">
+      Last updated:{" "}
+      {value || (
+        <span className="border border-dashed border-amber-500 text-amber-800 bg-amber-50 rounded px-1"
+              data-testid="legal-last-updated-todo">
+          [TODO(Brann): real date]
+        </span>
+      )}
+    </p>
+  );
+}
+
 function Legal({ title, children }) {
   return (
     <div className="min-h-screen bg-background">
@@ -27,7 +45,7 @@ function Legal({ title, children }) {
       </header>
       <main className="max-w-3xl mx-auto px-6 py-14 prose prose-sm" data-testid={`legal-${title.toLowerCase().replace(/\s+/g, "-")}`}>
         <h1 className="font-display text-4xl tracking-tight mb-6">{title}</h1>
-        <p className="text-xs text-muted-foreground">Last updated: {new Date().toLocaleDateString()}</p>
+        <LastUpdated />
         {children}
       </main>
     </div>

@@ -97,3 +97,36 @@ describe("full build (flag off): unchanged", () => {
     expect(container.querySelector('[data-testid="legal-todo-slot"]')).toBeNull();
   });
 });
+
+// EMP-WL-082: "Last updated" is a fixed build-time value, never today's date.
+describe("Last updated date", () => {
+  const ORIGINAL_DATE = process.env.REACT_APP_LEGAL_LAST_UPDATED;
+  afterEach(() => {
+    if (ORIGINAL_DATE === undefined) delete process.env.REACT_APP_LEGAL_LAST_UPDATED;
+    else process.env.REACT_APP_LEGAL_LAST_UPDATED = ORIGINAL_DATE;
+    jest.useRealTimers();
+  });
+
+  test.each([["privacy", Privacy], ["terms", Terms]])("%s shows the configured date exactly", async (_n, Page) => {
+    process.env.REACT_APP_LEGAL_LAST_UPDATED = "October 1, 2026";
+    await render(<Page />);
+    expect(container.querySelector('[data-testid="legal-last-updated"]').textContent).toBe("Last updated: October 1, 2026");
+    expect(container.querySelector('[data-testid="legal-last-updated-todo"]')).toBeNull();
+  });
+
+  test.each([["privacy", Privacy], ["terms", Terms]])("%s without a date shows a TODO(Brann) slot, not today", async (_n, Page) => {
+    delete process.env.REACT_APP_LEGAL_LAST_UPDATED;
+    jest.useFakeTimers({ now: new Date("2031-02-03T12:00:00Z") });
+    await render(<Page />);
+    const line = container.querySelector('[data-testid="legal-last-updated"]');
+    expect(line.textContent).toBe("Last updated: [TODO(Brann): real date]");
+    expect(line.textContent).not.toMatch(/2031|\d{1,2}\/\d{1,2}\/\d{2,4}/);
+  });
+
+  test("the date does not change with the clock", async () => {
+    process.env.REACT_APP_LEGAL_LAST_UPDATED = "2026-10-01";
+    jest.useFakeTimers({ now: new Date("2030-01-01T00:00:00Z") });
+    await render(<Privacy />);
+    expect(container.querySelector('[data-testid="legal-last-updated"]').textContent).toBe("Last updated: 2026-10-01");
+  });
+});
