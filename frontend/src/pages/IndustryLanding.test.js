@@ -44,3 +44,12 @@ test.each(INDUSTRY_SLUGS.flatMap((s) => [[s, "en"], [s, "es"]]))("%s (%s) render
 test("unknown slug returns no page data", () => {
   expect(industryPage("dental")).toBeNull();
 });
+
+test.each([["hvac", "en"], ["plumbing", "es"]])("%s (%s) header has the theme toggle", (slug, lang) => {
+  window.matchMedia = window.matchMedia || (() => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} }));
+  const { el, done } = mount(slug, lang);
+  const b = el.querySelector('header [data-testid="theme-toggle"]');
+  expect(b).not.toBeNull();
+  expect(b.getAttribute("aria-label")).toBe(lang === "es" ? "Cambiar a tema oscuro" : "Switch to dark theme");
+  done();
+});
