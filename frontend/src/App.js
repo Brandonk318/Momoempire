@@ -11,6 +11,8 @@ import Landing from "@/pages/Landing";
 import Pricing from "@/pages/Pricing";
 import Estimate from "@/pages/Estimate";
 import { Privacy, Terms } from "@/pages/Legal";
+import IndustryLanding from "@/pages/IndustryLanding";
+import { INDUSTRY_SLUGS } from "@/config/industries";
 import Login from "@/pages/Login";
 import SetPassword from "@/pages/SetPassword";
 import Signup from "@/pages/Signup";
@@ -87,6 +89,8 @@ function Router() {
       <Route path="/estimate" element={<Estimate />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
+      {INDUSTRY_SLUGS.map((s) => <Route key={s} path={`/${s}`} element={<IndustryLanding slug={s} />} />)}
+      {INDUSTRY_SLUGS.map((s) => <Route key={`es-${s}`} path={`/es/${s}`} element={<IndustryLanding slug={s} lang="es" />} />)}
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />

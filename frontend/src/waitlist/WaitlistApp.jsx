@@ -4,6 +4,8 @@ import { Toaster } from "../components/ui/sonner";
 import CanonicalLink from "../components/CanonicalLink";
 import Landing from "../pages/Landing";
 import { Privacy, Terms } from "../pages/Legal";
+import IndustryLanding from "../pages/IndustryLanding";
+import { INDUSTRY_SLUGS, INDUSTRY_PATHS } from "../config/industries";
 
 // EMP-WL-002: waitlist-only build (REACT_APP_WAITLIST_ONLY=true). Only these three paths exist;
 // anything else (login, signup, /app, /admin, public token pages, ...) redirects to "/".
@@ -11,7 +13,8 @@ import { Privacy, Terms } from "../pages/Legal";
 // decides it belongs on the waitlist launch: it calls /api/plans and /api/industries, which
 // return 404 in backend WAITLIST_ONLY mode.
 // TODO(PR #12): once merged, keep /estimate out of this list (covered by WaitlistApp.test.js).
-export const WAITLIST_PATHS = ["/", "/privacy", "/terms"];
+// Industry landing pages (/hvac, /es/hvac, ...) reuse the waitlist page and its form only.
+export const WAITLIST_PATHS = ["/", "/privacy", "/terms", ...INDUSTRY_PATHS];
 
 export function WaitlistRoutes() {
   return (
@@ -19,6 +22,8 @@ export function WaitlistRoutes() {
       <Route path="/" element={<Landing />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
+      {INDUSTRY_SLUGS.map((s) => <Route key={s} path={`/${s}`} element={<IndustryLanding slug={s} />} />)}
+      {INDUSTRY_SLUGS.map((s) => <Route key={`es-${s}`} path={`/es/${s}`} element={<IndustryLanding slug={s} lang="es" />} />)}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
