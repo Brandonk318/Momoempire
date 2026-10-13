@@ -17,6 +17,7 @@ jest.mock("../pages/Legal", () => ({
   Privacy: () => <div data-page="privacy" />,
   Terms: () => <div data-page="terms" />,
 }));
+jest.mock("../pages/IndustryLanding", () => ({ slug, lang = "en" }) => <div data-page={`industry-${lang}-${slug}`} />);
 jest.mock("../components/ui/sonner", () => ({ Toaster: () => null }));
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -47,8 +48,13 @@ function render(path) {
   return out;
 }
 
-test("only /, /privacy and /terms exist", () => {
-  expect(WAITLIST_PATHS).toEqual(["/", "/privacy", "/terms"]);
+test("only /, /privacy, /terms and the industry pages exist", () => {
+  const industries = ["hvac", "plumbing", "electrical", "roofing", "landscaping"];
+  expect(WAITLIST_PATHS).toEqual(["/", "/privacy", "/terms", ...industries.flatMap((s) => [`/${s}`, `/es/${s}`])]);
+  for (const s of industries) {
+    expect(render(`/${s}`)).toEqual({ page: `industry-en-${s}`, path: `/${s}` });
+    expect(render(`/es/${s}`)).toEqual({ page: `industry-es-${s}`, path: `/es/${s}` });
+  }
   expect(render("/")).toEqual({ page: "landing", path: "/" });
   expect(render("/privacy")).toEqual({ page: "privacy", path: "/privacy" });
   expect(render("/terms")).toEqual({ page: "terms", path: "/terms" });

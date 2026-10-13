@@ -32,14 +32,15 @@ const STEP_META = [
   { icon: Headphones, n: "03", titleKey: "landing.step_3_title", descKey: "landing.step_3_desc" },
 ];
 
-export default function Landing() {
+export default function Landing({ industry = null }) {
   const { t: tCurrent, i18n } = useTranslation();
   // EMP-WL-016: the waitlist page is English-only for now (most of its copy isn't translated), so
   // its few translated labels stay English too, even for a Spanish browser or a saved "es" choice.
-  const t = isWaitlistOnly() ? i18n.getFixedT("en") : tCurrent;
+  // Industry pages (/hvac, /es/hvac, ...) render in the language of their route.
+  const t = industry ? i18n.getFixedT(industry.lang) : isWaitlistOnly() ? i18n.getFixedT("en") : tCurrent;
   const [trial, setTrial] = useState(null);
   const [openFaq, setOpenFaq] = useState(0);
-  const [wlForm, setWlForm] = useState({ email: "", name: "", business_name: "", industry: "", note: "", website: "", turnstile_token: "" });
+  const [wlForm, setWlForm] = useState({ email: "", name: "", business_name: "", industry: industry ? industry.copy.formIndustry : "", note: "", website: "", turnstile_token: "" });
   const [wlSent, setWlSent] = useState(false);
   const [wlSending, setWlSending] = useState(false);
   const [wlError, setWlError] = useState("");
@@ -109,21 +110,21 @@ export default function Landing() {
   const trialCalls = trialLimits.calls || 25;
 
   return (
-    <div className="marketing-shell relative overflow-x-hidden" data-testid="landing-page">
+    <div className="marketing-shell relative overflow-x-hidden" data-testid={industry ? `industry-page-${industry.slug}` : "landing-page"} lang={industry ? industry.lang : undefined}>
       <div className="marketing-noise fixed inset-0 opacity-50" aria-hidden />
 
       {/* Nav */}
       <header className="sticky top-0 z-30 glass-crystal border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
           <Logo variant="light" />
-          <nav className="hidden md:flex items-center gap-8 text-[13px] text-white/70">
+          {!industry && <nav className="hidden md:flex items-center gap-8 text-[13px] text-white/70">
             <a href="#features" className="hover:text-white">{t("landing.nav_features")}</a>
             <a href="#industries" className="hover:text-white">{t("landing.nav_industries")}</a>
             {!waitlistOnly && <a href="#how" className="hover:text-white">{t("landing.nav_how")}</a>}
             {!waitlistOnly && <a href="#demo" className="hover:text-white">{t("landing.nav_demo")}</a>}
             {!waitlistOnly && <Link to="/pricing" className="hover:text-white">{t("landing.nav_pricing")}</Link>}
             <a href="#faq" className="hover:text-white">{t("landing.nav_faq")}</a>
-          </nav>
+          </nav>}
           <div className="flex items-center gap-2 shrink-0">
             {/* EMP-WL-016: the waitlist page is English-only for now, so no EN/ES switcher there. */}
             {!waitlistOnly && <LanguageSwitcher compact />}
@@ -145,13 +146,13 @@ export default function Landing() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           <div className="min-w-0 lg:col-span-7">
             <Badge className="bg-white/10 text-white/80 border border-white/15 mb-5 hover:bg-white/10">
-              <Sparkles className="h-3 w-3 mr-1.5" /> {t("landing.badge_platform")}
+              <Sparkles className="h-3 w-3 mr-1.5" /> {industry ? industry.copy.label : t("landing.badge_platform")}
             </Badge>
             <h1 className="font-display text-4xl sm:text-5xl md:text-7xl leading-[0.95] tracking-tight text-white break-words">
-              {t("landing.hero_title_lead")} <span className="text-white/60">{t("landing.hero_title_trail")}</span>
+              {industry ? industry.copy.title : <>{t("landing.hero_title_lead")} <span className="text-white/60">{t("landing.hero_title_trail")}</span></>}
             </h1>
             <p className="mt-6 text-white/70 text-lg max-w-xl">
-              {t("landing.hero_sub")}
+              {industry ? industry.copy.sub : t("landing.hero_sub")}
             </p>
             {/* EMP-WL-034 / WL-001: waitlist-only hero CTA is the primary button (existing label). */}
             {waitlistOnly && (
@@ -186,11 +187,12 @@ export default function Landing() {
             )}
           </div>
           <div className="min-w-0 lg:col-span-5">
-            <HeroPreview />
+            {industry ? <IndustryPoints copy={industry.copy} /> : <HeroPreview />}
           </div>
         </div>
       </section>
 
+      {!industry && (<>
       {/* Features */}
       <section id="features" className="relative max-w-7xl mx-auto px-6 py-20">
         <div className="overline text-white/70 mb-3">{t("landing.pillars_eyebrow")}</div>
@@ -281,6 +283,7 @@ export default function Landing() {
           ))}
         </div>
       </section>
+      </>)}
 
       {/* Waitlist */}
       {/* EMP-WL-006: one column on phones. The old grid-cols-12 + gap-8 kept 11 column gaps
@@ -346,12 +349,14 @@ export default function Landing() {
         </div>
       </section>
 
+      {!industry && (<>
       {/* Final CTA (trial signup; hidden in the waitlist-only build). TODO(WL-001, Brann): waitlist copy. */}
       {!waitlistOnly && <section className="relative max-w-5xl mx-auto px-6 py-20 text-center text-white">
         <h2 className="font-display text-5xl md:text-6xl tracking-tight">{t("landing.final_title")}</h2>
         <p className="text-white/70 mt-5 max-w-xl mx-auto">{t("landing.final_sub")}</p>
         <Link to="/signup"><Button className="mt-8 h-12 px-7 bg-white text-black hover:bg-white/90 text-base" data-testid="final-cta-signup">{t("landing.hero_cta_free")}<ArrowRight className="h-4 w-4 ml-1.5" /></Button></Link>
       </section>}
+      </>)}
 
       {/* Footer */}
       <footer className="relative border-t border-white/10 mt-10 text-white/60">
@@ -386,6 +391,20 @@ export default function Landing() {
         </div>
         <div className="max-w-7xl mx-auto px-6 pb-8 text-[11px] text-white/60">© {new Date().getFullYear()} AI Office · {t("landing.footer_rights")}</div>
       </footer>
+    </div>
+  );
+}
+
+// Industry pages: plain list of the page's points (draft copy, see config/industries.js).
+function IndustryPoints({ copy }) {
+  return (
+    <div className="glass-crystal rounded-2xl p-6 text-white" data-testid="industry-points">
+      <h2 className="font-display text-xl">{copy.pointsTitle}</h2>
+      <ul className="mt-4 space-y-3">
+        {copy.points.map((pt) => (
+          <li key={pt} className="flex gap-2 text-white/80"><Check className="h-4 w-4 mt-1 shrink-0" aria-hidden />{pt}</li>
+        ))}
+      </ul>
     </div>
   );
 }

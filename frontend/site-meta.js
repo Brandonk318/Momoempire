@@ -9,8 +9,10 @@
 const DEFAULT_SITE_NAME = "Empire AI Office"; // TODO(Brann): brand name (current <title> kept)
 const DEFAULT_DESCRIPTION = "Empire AI Office platform"; // TODO(Brann): marketing description
 
-const PUBLIC_PAGES = ["/", "/pricing", "/privacy", "/terms"];
-const WAITLIST_PAGES = ["/", "/privacy", "/terms"];
+const { INDUSTRY_PATHS } = require("./src/config/industries");
+
+const PUBLIC_PAGES = ["/", "/pricing", "/privacy", "/terms", ...INDUSTRY_PATHS];
+const WAITLIST_PAGES = ["/", "/privacy", "/terms", ...INDUSTRY_PATHS];
 
 function clean(v) {
   return typeof v === "string" ? v.trim() : "";
