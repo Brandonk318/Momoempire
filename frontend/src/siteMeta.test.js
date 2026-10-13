@@ -1,3 +1,4 @@
+const { INDUSTRY_PATHS } = require("./config/industries");
 // EMP-WL-014: site metadata, robots.txt and sitemap.xml generation (frontend/site-meta.js) and
 // the cleaned-up public/index.html. The webpack wiring is exercised by the builds.
 const fs = require("fs");
@@ -69,19 +70,19 @@ describe("robots.txt and sitemap.xml", () => {
     expect(sitemapXml(cfg)).toBeNull();
   });
 
-  test("waitlist build lists only /, /privacy and /terms", () => {
+  test("waitlist build lists /, /privacy, /terms and the industry pages", () => {
     const cfg = siteConfig({ REACT_APP_WAITLIST_ONLY: "true", REACT_APP_SITE_URL: "https://example.test/" });
     expect(robotsTxt(cfg)).toBe("User-agent: *\nAllow: /\n\nSitemap: https://example.test/sitemap.xml\n");
     const xml = sitemapXml(cfg);
     const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
-    expect(locs).toEqual(["https://example.test/", "https://example.test/privacy", "https://example.test/terms"]);
+    expect(locs).toEqual(["/", "/privacy", "/terms", ...INDUSTRY_PATHS].map((p) => `https://example.test${p}`));
     expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')).toBe(true);
   });
 
   test("normal build adds /pricing and keeps crawlers out of the app, auth and token links", () => {
     const cfg = siteConfig({ REACT_APP_SITE_URL: "https://example.test" });
     const locs = [...sitemapXml(cfg).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
-    expect(locs).toEqual(["/", "/pricing", "/privacy", "/terms"].map((p) => `https://example.test${p}`));
+    expect(locs).toEqual(["/", "/pricing", "/privacy", "/terms", ...INDUSTRY_PATHS].map((p) => `https://example.test${p}`));
     const robots = robotsTxt(cfg);
     for (const p of ["/app", "/admin", "/login", "/signup", "/reset-password", "/invite", "/reviews/", "/portal/"]) {
       expect(robots).toContain(`Disallow: ${p}\n`);

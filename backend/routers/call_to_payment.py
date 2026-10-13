@@ -529,6 +529,8 @@ async def connect_webhook(request: Request):
     payload = await request.body()
     sig = request.headers.get("stripe-signature", "")
     # Always require a configured signing secret + valid signature (no unsigned dev path).
+    # 503 when no secret is configured (incl. whitespace-only), 400 when the signature is missing or
+    # invalid; see services/stripe_config.construct_stripe_event. (Also the intent of 9cf5228.)
     event = construct_stripe_event(
         payload, sig, "STRIPE_CONNECT_WEBHOOK_SECRET", "STRIPE_WEBHOOK_SECRET"
     )

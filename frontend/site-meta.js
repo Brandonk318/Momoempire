@@ -12,8 +12,10 @@ const { brandConfig } = require("./src/config/brand");
 const DEFAULT_SITE_NAME = brandConfig().name;
 const DEFAULT_DESCRIPTION = brandConfig().slogan;
 
-const PUBLIC_PAGES = ["/", "/pricing", "/privacy", "/terms"];
-const WAITLIST_PAGES = ["/", "/privacy", "/terms"];
+const { INDUSTRY_PATHS } = require("./src/config/industries");
+
+const PUBLIC_PAGES = ["/", "/pricing", "/privacy", "/terms", ...INDUSTRY_PATHS];
+const WAITLIST_PAGES = ["/", "/privacy", "/terms", ...INDUSTRY_PATHS];
 
 function clean(v) {
   return typeof v === "string" ? v.trim() : "";

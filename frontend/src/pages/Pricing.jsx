@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { isPaidCheckoutPlan, setPendingCheckoutPlan, startStripeCheckout } from "@/lib/checkout";
 
+import { CONTACT_EMAIL } from "@/config/contact";
 export default function Pricing() {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -133,7 +134,7 @@ export default function Pricing() {
               <div className="overline text-white/60">Enterprise</div>
               <div className="font-display text-3xl mt-2 text-white">Custom</div>
               <p className="text-sm text-white/60 mt-2 max-w-md">{enterprise.description || "Multiple locations, custom AI personas, custom integrations."}</p>
-              <a href="mailto:sales@aioffice.io"><Button variant="outline" className="mt-5 bg-transparent border-white/30 text-white hover:bg-white/10" data-testid="pricing-enterprise-cta">Contact sales</Button></a>
+              <a href={`mailto:${CONTACT_EMAIL}`}><Button variant="outline" className="mt-5 bg-transparent border-white/30 text-white hover:bg-white/10" data-testid="pricing-enterprise-cta">Contact sales</Button></a>
             </div>
           )}
         </div>

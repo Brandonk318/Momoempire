@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { isWaitlistOnly } from "@/lib/waitlistMode";
 
 import { BRAND_NAME } from "@/config/brand";
+import { CONTACT_EMAIL } from "@/config/contact";
 // EMP-WL-053: the waitlist-only build has no trial, pricing, plans or billing, so every sentence
 // about them is hidden there and replaced by a clearly marked slot for Brann/counsel to fill.
 // The legal text itself is NOT rewritten; the full build renders exactly as before.
@@ -81,11 +82,11 @@ export function Privacy() {
           and Turnstile when on), so visitors' IPs reach them. No wording is written here. */}
       {wl && <TodoSlot id="privacy-site-processors" what="Google Fonts and Cloudflare (hosting, Turnstile) as processors of visitor data" />}
       <h2>Your rights</h2>
-      <p>Email <a href="mailto:privacy@aioffice.io">privacy@aioffice.io</a> to export, correct, or delete your data. We will respond within 30 days.</p>
+      <p>Email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> to export, correct, or delete your data. We will respond within 30 days.</p>
       <h2>Retention</h2>
       {wl ? <TodoSlot id="privacy-retention" what="retention" /> : <p>We keep account data while your workspace is active, plus 90 days after cancellation for billing reconciliation. Call recordings and transcripts can be deleted on request.</p>}
       <h2>Contact</h2>
-      <p>Questions? <a href="mailto:privacy@aioffice.io">privacy@aioffice.io</a>.</p>
+      <p>Questions? <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.</p>
     </Legal>
   );
 }
@@ -116,7 +117,7 @@ export function Terms() {
       <h2>Changes</h2>
       <p>We'll email material changes 30 days before they take effect.</p>
       <h2>Contact</h2>
-      <p><a href="mailto:legal@aioffice.io">legal@aioffice.io</a>.</p>
+      <p><a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.</p>
     </Legal>
   );
 }
