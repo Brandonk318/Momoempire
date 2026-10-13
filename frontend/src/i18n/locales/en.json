@@ -225,7 +225,8 @@
     "voice_ended_title": "Voice demo ended",
     "voice_ended_sub": "Try the text demo, or start a free trial for the full office.",
     "voice_try_text": "Try text demo",
-    "voice_off_by_default_hint": "Voice mode is off by default until enabled by the team (cost-controlled)."
+    "voice_off_by_default_hint": "Voice mode is off by default until enabled by the team (cost-controlled).",
+    "demo_expired": "That demo timed out. Pick an industry to start a new one."
   },
   "repeat": {
     "title": "Repeat Scheduling",

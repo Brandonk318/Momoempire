@@ -200,8 +200,12 @@ async def demo_turn(data: DemoTurnIn, request: Request):
             upsells=[],
             lang=sess.get("lang", "en"),
         )
-    except Exception as e:
-        return {"reply": f"Hmm, I had a glitch there — try again. ({e})", "ended": False}
+    except Exception:
+        # QA-DEMO: never echo exception text to the public demo; log it server-side instead.
+        log.exception("public demo turn failed")
+        sess["history"].pop()
+        return {"reply": "Perdón, tuve un problema. ¿Puede intentarlo de nuevo?" if is_es else
+                         "Sorry, I had a problem there. Could you try that again?", "ended": False}
     reply = ai.get("reply") or ("Perdón, ¿podría repetir?" if is_es else "Sorry, could you repeat that?")
     sess["history"].append({"role": "ai", "content": reply})
     sess["turns"] += 1
@@ -315,14 +319,17 @@ async def demo_voice_token(data: DemoVoiceTokenIn, request: Request):
                 json=payload,
             )
         if r.status_code >= 400:
+            # QA-DEMO: the provider's error body stays in the server log, not the public response.
+            log.warning("voice demo client_secret failed: %s %s", r.status_code, (r.text or "")[:200])
             return {
                 "available": False,
-                "reason": (r.text or "")[:200],
+                "reason": "voice provider error",
                 "fallback": "web-speech",
             }
         data_out = r.json() or {}
-    except Exception as e:
-        return {"available": False, "reason": str(e)[:200], "fallback": "web-speech"}
+    except Exception:
+        log.exception("voice demo client_secret request failed")
+        return {"available": False, "reason": "voice provider error", "fallback": "web-speech"}
 
     # OpenAI returns { value: "ek_…", expires_at: … } (and optionally nested session).
     ephemeral = data_out.get("value") or (data_out.get("client_secret") or {}).get("value")

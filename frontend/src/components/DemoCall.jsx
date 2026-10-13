@@ -68,7 +68,16 @@ export default function DemoCall() {
       const { data } = await api.post("/public/demo/turn", { session_id: session.session_id, text: msg });
       setMessages((m) => [...m, { role: "ai", content: data.reply }]);
       if (data.ended) setSession({ ...session, ended: true });
-    } catch (e) { toast.error(errMessage(e)); }
+    } catch (e) {
+      // QA-DEMO: an expired session (404) used to leave the chat stuck; go back to the start card.
+      if (e?.response?.status === 404) {
+        setSession(null);
+        setMessages([]);
+        toast.message(t("landing.demo_expired"));
+      } else {
+        toast.error(errMessage(e));
+      }
+    }
     finally { setSending(false); }
   };
 
@@ -100,8 +109,9 @@ export default function DemoCall() {
       const { data } = await api.post("/public/demo/voice-token", { industry, lang });
       if (!data?.available || !data?.value) {
         setVoiceState("idle");
+        // QA-DEMO: data.reason is an internal/config detail (env var names, provider errors); never show it.
         toast.message(t("landing.voice_unavailable"), {
-          description: data?.reason || t("landing.voice_fallback_hint"),
+          description: t("landing.voice_fallback_hint"),
         });
         return;
       }
@@ -136,7 +146,7 @@ export default function DemoCall() {
       if (e?.message === "microphone_permission_denied") {
         toast.error(t("landing.voice_mic_denied"));
       } else {
-        toast.error(errMessage(e) || t("landing.voice_connect_failed"));
+        toast.error(t("landing.voice_connect_failed"));
       }
     }
   };
