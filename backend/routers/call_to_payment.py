@@ -21,6 +21,7 @@ Design notes:
       with a unique index; a duplicate upsert returns a 200 without re-processing.
 """
 from __future__ import annotations
+from brand import brand_name
 import os
 import logging
 from datetime import datetime, timezone, timedelta
@@ -274,7 +275,7 @@ async def owner_decision(qid: str, data: QuoteDecisionIn, user: dict = Depends(r
                 to=quote["customer_email"],
                 subject=f"Your quote: {quote['title']}",
                 html=html,
-                from_name=tenant.get("name", "AI Office"),
+                from_name=tenant.get("name") or brand_name(),
             )
         except Exception as e:
             log.warning("quote email send failed: %s", e)
@@ -655,7 +656,7 @@ async def _apply_payment_success(db, pi: dict, account: str | None = None):
                          "This email is your receipt."),
             )
             await send_email(to=inv["customer_email"], subject="Payment received — receipt",
-                             html=html, from_name=tenant.get("name", "AI Office"))
+                             html=html, from_name=tenant.get("name") or brand_name())
         except Exception as e:
             log.warning("receipt email failed: %s", e)
 
@@ -820,7 +821,7 @@ async def run_overdue_reminders(now: datetime | None = None) -> dict:
                            f'<a href="{link}">Pay online</a>.')
                 html = followup_html(business=tenant.get("name", "us"), message=msg)
                 email_id = await send_email(to=inv["customer_email"], subject=subject, html=html,
-                                            from_name=tenant.get("name", "AI Office"))
+                                            from_name=tenant.get("name") or brand_name())
                 outcome = {"status": "sent" if email_id else "send_failed", "email_id": email_id}
             else:
                 outcome = {"status": "no_email"}

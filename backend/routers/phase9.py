@@ -1,6 +1,7 @@
 """Phase 9 features: 24h appointment auto-confirmation, review-request autopilot (2h),
 call-back scheduler, service-area heatmap, Google Calendar ICS export for standup."""
 import os
+from brand import brand_name
 import re
 import json
 import logging
@@ -316,7 +317,7 @@ async def standup_ics(user: dict = Depends(require_tenant_user)):
     ics = (
         "BEGIN:VCALENDAR\r\n"
         "VERSION:2.0\r\n"
-        f"PRODID:-//AI Office//Standup//EN\r\n"
+        f"PRODID:-//{brand_name()}//Standup//EN\r\n"
         "CALSCALE:GREGORIAN\r\n"
         "METHOD:PUBLISH\r\n"
         "BEGIN:VEVENT\r\n"

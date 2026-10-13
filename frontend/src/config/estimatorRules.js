@@ -1,7 +1,7 @@
 // =====================================================================================
 // PLACEHOLDER — Brann to confirm.
 // Instant-quote estimator (lead qualifier) mapping rules. Every threshold and mapping in this
-// file was chosen by Momoempire Builder as a starting point and is NOT a product decision.
+// file was chosen by the builder agent as a starting point and is NOT a product decision.
 // Plan names, prices and limits are NOT here: they come from GET /api/plans at runtime.
 // =====================================================================================
 

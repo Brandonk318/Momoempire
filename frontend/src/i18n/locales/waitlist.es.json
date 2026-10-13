@@ -4,7 +4,7 @@
     "nav_industries": "Industrias",
     "nav_faq": "Preguntas",
     "cta_join_waitlist": "Lista de espera",
-    "badge_platform": "AI Office Platform",
+    "badge_platform": "{{brand}}",
     "hero_title_lead": "Le armamos un empleado AI",
     "hero_title_trail": "y una oficina digital.",
     "hero_sub": "Su negocio no vuelve a perder una llamada. El AI contesta, agenda trabajos, da seguimiento a prospectos tibios y le entrega un resumen semanal — en piloto automático y con su voz.",

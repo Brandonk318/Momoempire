@@ -1,5 +1,7 @@
 """Email service — Emergent-managed Resend proxy. Follow playbook guardrails."""
 import os
+
+from brand import brand_name
 import re
 import ipaddress
 import logging
@@ -17,7 +19,7 @@ EMAIL_BASE_URL = "https://integrations.emergentagent.com"
 def _cfg():
     return {
         "key": os.environ.get("EMERGENT_EMAIL_KEY"),
-        "from_name": os.environ.get("EMAIL_FROM_NAME") or "AI Office",
+        "from_name": os.environ.get("EMAIL_FROM_NAME") or brand_name(),
         "reply_to": os.environ.get("EMAIL_REPLY_TO"),
     }
 
@@ -130,8 +132,9 @@ async def send_email(*, to: str, subject: str, html: str,
 
 
 # ---------- Templates (server-side, never caller-supplied) ----------
-def _frame(body_html: str, app_name: str = "AI Office") -> str:
+def _frame(body_html: str, app_name: str | None = None) -> str:
     """Shared email wrapper. Inline styles only."""
+    app_name = app_name or brand_name()
     return (
         '<table role="presentation" width="100%" style="background:#f6f7f9;padding:24px 0">'
         '<tr><td align="center">'

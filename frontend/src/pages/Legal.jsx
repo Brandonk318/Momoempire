@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { isWaitlistOnly } from "@/lib/waitlistMode";
 
+import { BRAND_NAME } from "@/config/brand";
 // EMP-WL-053: the waitlist-only build has no trial, pricing, plans or billing, so every sentence
 // about them is hidden there and replaced by a clearly marked slot for Brann/counsel to fill.
 // The legal text itself is NOT rewritten; the full build renders exactly as before.
@@ -56,7 +57,7 @@ export function Privacy() {
   const wl = isWaitlistOnly();
   return (
     <Legal title="Privacy Policy">
-      <p>AI Office ("we", "our", "us") provides a multi-tenant SaaS platform that gives small businesses an AI receptionist, CRM, scheduling, and growth tooling. This policy explains what we collect, why, and how to control it.</p>
+      <p>{BRAND_NAME} ("we", "our", "us") provides a multi-tenant SaaS platform that gives small businesses an AI receptionist, CRM, scheduling, and growth tooling. This policy explains what we collect, why, and how to control it.</p>
       <h2>What we collect</h2>
       <ul>
         <li><strong>Account data</strong> — name, email, business name, hashed password, Google OAuth profile when used.</li>
@@ -93,7 +94,7 @@ export function Terms() {
   const wl = isWaitlistOnly();
   return (
     <Legal title="Terms of Service">
-      <p>By using AI Office you agree to these terms. In short: we provide the platform honestly, you provide accurate info and don't abuse it.</p>
+      <p>By using {BRAND_NAME} you agree to these terms. In short: we provide the platform honestly, you provide accurate info and don't abuse it.</p>
       <h2>Account</h2>
       <p>You must be 18+ and the authorized operator of the business you're onboarding. Keep your password safe. You're responsible for your team members' actions in your workspace.</p>
       <h2>Acceptable use</h2>

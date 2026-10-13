@@ -18,6 +18,7 @@ import {
   Headphones, ChevronDown, Check,
 } from "lucide-react";
 
+import { BRAND_NAME } from "@/config/brand";
 const PILLAR_META = [
   { icon: Bot, titleKey: "landing.pillar_receptionist_title", descKey: "landing.pillar_receptionist_desc", testid: "pillar-receptionist" },
   { icon: Target, titleKey: "landing.pillar_sales_title", descKey: "landing.pillar_sales_desc", testid: "pillar-sales" },
@@ -384,7 +385,7 @@ export default function Landing() {
             </ul>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto px-6 pb-8 text-[11px] text-white/60">© {new Date().getFullYear()} AI Office · {t("landing.footer_rights")}</div>
+        <div className="max-w-7xl mx-auto px-6 pb-8 text-[11px] text-white/60">© {new Date().getFullYear()} {BRAND_NAME} · {t("landing.footer_rights")}</div>
       </footer>
     </div>
   );

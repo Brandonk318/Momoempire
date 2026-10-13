@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 
+import { BRAND_NAME } from "@/config/brand";
 const GROUPS = [
   {
     label: "nav.workspace",
@@ -169,7 +170,7 @@ export default function DashboardLayout({ children }) {
         </div>
         {needsOnboarding && (
           <div className="border-b border-amber-200/70 bg-amber-50 text-amber-900 px-6 py-2 text-[13px] flex items-center justify-between">
-            <span data-testid="onboarding-banner">Finish setting up your AI Office to unlock the full dashboard.</span>
+            <span data-testid="onboarding-banner">Finish setting up your {BRAND_NAME} to unlock the full dashboard.</span>
             <Link to="/onboarding" className="font-medium underline underline-offset-4" data-testid="resume-onboarding-link">Resume setup</Link>
           </div>
         )}

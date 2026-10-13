@@ -357,7 +357,7 @@ async def demo_voice_token(data: DemoVoiceTokenIn, request: Request):
     }
 
 # ---------- Waitlist ----------
-# Its own limiter buckets (never shared with the AI demo). Defaults chosen by Momoempire Builder;
+# Its own limiter buckets (never shared with the AI demo). Defaults chosen by the builder agent;
 # adjust freely, these are not product decisions.
 WAITLIST_MAX_BODY_BYTES = 16 * 1024
 _WAITLIST_IP_MINUTE = SlidingLimiter(5, 60.0)        # signups per IP per minute
@@ -686,13 +686,14 @@ async def _send_waitlist_confirmation(email: str) -> None:
         return
     try:
         from services.email import send_email, _frame
+        from brand import brand_name
         html = _frame(
             "<p style='font-size:20px;margin:4px 0 10px'>You're on the list ✨</p>"
             "<p style='color:#555'>Thanks for raising your hand. We'll reach out as soon as your industry seat opens up. "
             "In the meantime, you can also try the free trial anytime at <a href='https://www.aioffice.io/pricing'>our pricing page</a>.</p>",
-            app_name="AI Office",
+            app_name=brand_name(),
         )
-        await send_email(to=email, subject="You're on the AI Office waitlist", html=html)
+        await send_email(to=email, subject=f"You're on the waitlist for {brand_name()}", html=html)
     except Exception:
         log.exception("waitlist: confirmation email failed")
 

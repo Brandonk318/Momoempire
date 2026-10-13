@@ -1,3 +1,4 @@
+import { BRAND_NAME } from "@/config/brand";
 export function Logo({ className = "", mark = true, variant = "dark" }) {
   const inkMain = variant === "dark" ? "#0A0A0A" : "#FFFFFF";
   const inkSub = variant === "dark" ? "#2563EB" : "#9CA3FF";
@@ -11,7 +12,7 @@ export function Logo({ className = "", mark = true, variant = "dark" }) {
         </svg>
       )}
       <span className="font-display text-[18px] font-semibold tracking-tight" style={{ color: inkMain }}>
-        AI Office
+        {BRAND_NAME}
       </span>
     </div>
   );
