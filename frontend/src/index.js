@@ -9,6 +9,7 @@ import "@/i18n";
 // build and to src/App.js otherwise, so the waitlist build does not include App.js (dashboard,
 // admin, auth pages) at all, and the normal build is bundled exactly as before.
 import App from "@root-app";
+import ThemeProvider from "@/components/ThemeProvider";
 
 // WL-033: the waitlist build doesn't use react-query, so skip it there (build-time constant;
 // webpack then drops @tanstack/react-query from that bundle).
@@ -27,12 +28,14 @@ const queryClient = WAITLIST_ONLY
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
-    {WAITLIST_ONLY ? (
-      <App />
-    ) : (
-      <QueryClientProvider client={queryClient}>
+    <ThemeProvider>
+      {WAITLIST_ONLY ? (
         <App />
-      </QueryClientProvider>
-    )}
+      ) : (
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      )}
+    </ThemeProvider>
   </React.StrictMode>,
 );

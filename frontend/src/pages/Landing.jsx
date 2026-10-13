@@ -13,9 +13,10 @@ import { toast } from "sonner";
 import DemoCall from "@/components/DemoCall";
 import { isWaitlistOnly } from "@/lib/waitlistMode";
 import TurnstileWidget from "@/components/TurnstileWidget";
+import ThemeToggle from "@/components/ThemeToggle";
 import {
-  ArrowRight, Bot, Target, Rocket, Sparkles, PhoneCall, UserPlus,
-  Headphones, ChevronDown, Check,
+  ArrowRight, Bot, Target, Rocket, PhoneCall, UserPlus,
+  Headphones, ChevronDown, Check, Snowflake, Flame, Thermometer, Wind, Fan,
 } from "lucide-react";
 
 import { CONTACT_EMAIL } from "@/config/contact";
@@ -24,6 +25,26 @@ const PILLAR_META = [
   { icon: Target, titleKey: "landing.pillar_sales_title", descKey: "landing.pillar_sales_desc", testid: "pillar-sales" },
   { icon: Rocket, titleKey: "landing.pillar_growth_title", descKey: "landing.pillar_growth_desc", testid: "pillar-growth" },
 ];
+// Decorative heating/cooling accents (aria-hidden): cool = blue, warm = orange.
+const PILLAR_ACCENT = [
+  { icon: Snowflake, tone: "hvac-cool" },
+  { icon: Flame, tone: "hvac-warm" },
+  { icon: Wind, tone: "hvac-cool" },
+];
+
+// Decorative HVAC icon strip under the hero copy. Purely visual, hidden from screen readers.
+function HvacIconStrip() {
+  const items = [
+    [Snowflake, "hvac-cool"], [Fan, "hvac-cool"], [Thermometer, "hvac-neutral"], [Flame, "hvac-warm"], [Wind, "hvac-cool"],
+  ];
+  return (
+    <div className="mt-8 flex items-center gap-3" aria-hidden="true" data-testid="hvac-icon-strip">
+      {items.map(([Icon, tone], i) => (
+        <span key={i} className={`hvac-chip ${tone} h-11 w-11 rounded-xl grid place-items-center`}><Icon className="h-5 w-5" /></span>
+      ))}
+    </div>
+  );
+}
 
 const INDUSTRY_KEYS = ["hvac", "dental", "legal", "salon"];
 
@@ -111,13 +132,13 @@ export default function Landing({ industry = null }) {
   const trialCalls = trialLimits.calls || 25;
 
   return (
-    <div className="marketing-shell relative overflow-x-hidden" data-testid={industry ? `industry-page-${industry.slug}` : "landing-page"} lang={industry ? industry.lang : undefined}>
+    <div className="marketing-shell marketing-themed relative overflow-x-hidden" data-testid={industry ? `industry-page-${industry.slug}` : "landing-page"} lang={industry ? industry.lang : undefined}>
       <div className="marketing-noise fixed inset-0 opacity-50" aria-hidden />
 
       {/* Nav */}
       <header className="sticky top-0 z-30 glass-crystal border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-          <Logo variant="light" />
+          <Logo />
           {!industry && <nav className="hidden md:flex items-center gap-8 text-[13px] text-white/70">
             <a href="#features" className="hover:text-white">{t("landing.nav_features")}</a>
             <a href="#industries" className="hover:text-white">{t("landing.nav_industries")}</a>
@@ -127,6 +148,7 @@ export default function Landing({ industry = null }) {
             <a href="#faq" className="hover:text-white">{t("landing.nav_faq")}</a>
           </nav>}
           <div className="flex items-center gap-2 shrink-0">
+            <ThemeToggle lang={industry ? industry.lang : isWaitlistOnly() ? "en" : (i18n.language || "en").slice(0, 2)} className="text-white" />
             {/* EMP-WL-016: the waitlist page is English-only for now, so no EN/ES switcher there. */}
             {!waitlistOnly && <LanguageSwitcher compact />}
             {/* EMP-WL-034: waitlist-only header CTA (existing "Join waitlist" label). */}
@@ -147,14 +169,15 @@ export default function Landing({ industry = null }) {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           <div className="min-w-0 lg:col-span-7">
             <Badge className="bg-white/10 text-white/80 border border-white/15 mb-5 hover:bg-white/10">
-              <Sparkles className="h-3 w-3 mr-1.5" /> {industry ? industry.copy.label : t("landing.badge_platform")}
+              <Thermometer className="h-3 w-3 mr-1.5" aria-hidden /> {industry ? industry.copy.label : t("landing.badge_platform")}
             </Badge>
             <h1 className="font-display text-4xl sm:text-5xl md:text-7xl leading-[0.95] tracking-tight text-white break-words">
-              {industry ? industry.copy.title : <>{t("landing.hero_title_lead")} <span className="text-white/60">{t("landing.hero_title_trail")}</span></>}
+              {industry ? industry.copy.title : <>{t("landing.hero_title_lead")} <span className="hvac-accent-text">{t("landing.hero_title_trail")}</span></>}
             </h1>
             <p className="mt-6 text-white/70 text-lg max-w-xl">
               {industry ? industry.copy.sub : t("landing.hero_sub")}
             </p>
+            <HvacIconStrip />
             {/* EMP-WL-034 / WL-001: waitlist-only hero CTA is the primary button (existing label). */}
             {waitlistOnly && (
               <div className="mt-8">
@@ -199,13 +222,17 @@ export default function Landing({ industry = null }) {
         <div className="overline text-white/70 mb-3">{t("landing.pillars_eyebrow")}</div>
         <h2 className="font-display text-4xl md:text-5xl text-white tracking-tight max-w-2xl">{t("landing.pillars_title")}</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-10">
-          {PILLAR_META.map((p) => (
-            <div key={p.testid} className="glass-crystal rounded-2xl p-6 text-white" data-testid={p.testid}>
-              <div className="h-10 w-10 rounded-xl bg-white/10 border border-white/10 grid place-items-center mb-5"><p.icon className="h-5 w-5" /></div>
+          {PILLAR_META.map((p, idx) => {
+            const A = PILLAR_ACCENT[idx % PILLAR_ACCENT.length];
+            return (
+            <div key={p.testid} className="glass-crystal hvac-card relative rounded-2xl p-6 text-white" data-testid={p.testid}>
+              <A.icon className={`${A.tone} hvac-corner absolute top-5 right-5 h-5 w-5`} aria-hidden />
+              <div className={`hvac-chip ${A.tone} h-10 w-10 rounded-xl grid place-items-center mb-5`}><p.icon className="h-5 w-5" /></div>
               <h3 className="font-medium text-xl">{t(p.titleKey)}</h3>
               <p className="text-white/70 text-sm mt-2 leading-relaxed">{t(p.descKey)}</p>
             </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -363,7 +390,7 @@ export default function Landing({ industry = null }) {
       <footer className="relative border-t border-white/10 mt-10 text-white/60">
         <div className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-2 md:grid-cols-4 gap-8 text-sm">
           <div>
-            <Logo variant="light" />
+            <Logo />
             <p className="mt-3 text-xs text-white/60 max-w-xs">{t("landing.footer_tagline")}</p>
           </div>
           <div>
@@ -400,10 +427,10 @@ export default function Landing({ industry = null }) {
 function IndustryPoints({ copy }) {
   return (
     <div className="glass-crystal rounded-2xl p-6 text-white" data-testid="industry-points">
-      <h2 className="font-display text-xl">{copy.pointsTitle}</h2>
+      <h2 className="font-display text-xl flex items-center gap-2"><Snowflake className="hvac-cool h-5 w-5" aria-hidden /><Flame className="hvac-warm h-5 w-5" aria-hidden />{copy.pointsTitle}</h2>
       <ul className="mt-4 space-y-3">
         {copy.points.map((pt) => (
-          <li key={pt} className="flex gap-2 text-white/80"><Check className="h-4 w-4 mt-1 shrink-0" aria-hidden />{pt}</li>
+          <li key={pt} className="flex gap-2 text-white/80"><Check className="hvac-cool h-4 w-4 mt-1 shrink-0" aria-hidden />{pt}</li>
         ))}
       </ul>
     </div>
