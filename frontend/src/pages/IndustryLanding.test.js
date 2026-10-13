@@ -53,3 +53,13 @@ test.each([["hvac", "en"], ["plumbing", "es"]])("%s (%s) header has the theme to
   expect(b.getAttribute("aria-label")).toBe(lang === "es" ? "Cambiar a tema oscuro" : "Switch to dark theme");
   done();
 });
+
+test("HVAC page shows the ROI calculator and diagrams; other niches don't yet", () => {
+  const { el, done } = mount("hvac", "en");
+  expect(el.querySelector('[data-testid="roi-calculator"]')).not.toBeNull();
+  expect(el.querySelectorAll('[data-testid="workflow-diagrams"] svg')).toHaveLength(3);
+  done();
+  const p = mount("plumbing", "en");
+  expect(p.el.querySelector('[data-testid="roi-calculator"]')).toBeNull();
+  p.done();
+});
