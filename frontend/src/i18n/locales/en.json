@@ -357,5 +357,31 @@
     "testimonials_eyebrow": "What customers say",
     "testimonials_title": "Loved by the people we serve",
     "no_testimonials": "No testimonials yet — be the first to leave one."
+  },
+  "pricing": {
+    "badge": "Pricing",
+    "title": "Pay for the office, not the overtime.",
+    "sub": "Every plan includes the AI employee, a branded page, and your CRM. Scale up as calls grow. Overage billed per plan — no surprise shutoffs.",
+    "loading": "Loading plans…",
+    "load_error": "We couldn't load the plans right now.",
+    "retry": "Try again",
+    "per_month": "/mo",
+    "ai_minutes": "{{n}} AI minutes / mo",
+    "calls": "{{n}} calls / mo",
+    "sms": "{{n}} SMS / mo",
+    "overage": "Overage:",
+    "per_min": "{{n}}¢/min",
+    "per_sms": "{{n}}¢/SMS",
+    "redirecting": "Redirecting…",
+    "start_plan": "Start {{name}}",
+    "free": "Free",
+    "start_trial": "Start free trial",
+    "enterprise": "Enterprise",
+    "custom": "Custom",
+    "enterprise_desc": "Multiple locations, custom AI personas, custom integrations.",
+    "contact_sales": "Contact sales",
+    "footnote": "Plans update live from the admin dashboard — pricing shown is always current.",
+    "home": "Home",
+    "get_started": "Get started"
   }
 }
