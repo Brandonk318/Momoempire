@@ -357,5 +357,31 @@
     "testimonials_eyebrow": "Lo que dicen los clientes",
     "testimonials_title": "Queridos por la gente a la que servimos",
     "no_testimonials": "Aún no hay testimonios — sea el primero en dejar uno."
+  },
+  "pricing": {
+    "badge": "Precios",
+    "title": "Pague por la oficina, no por las horas extra.",
+    "sub": "Todos los planes incluyen el empleado de IA, una página con su marca y su CRM. Crezca a medida que aumentan las llamadas. El excedente se cobra según el plan, sin cortes inesperados.",
+    "loading": "Cargando planes…",
+    "load_error": "No pudimos cargar los planes en este momento.",
+    "retry": "Intentar de nuevo",
+    "per_month": "/mes",
+    "ai_minutes": "{{n}} minutos de IA / mes",
+    "calls": "{{n}} llamadas / mes",
+    "sms": "{{n}} SMS / mes",
+    "overage": "Excedente:",
+    "per_min": "{{n}}¢/min",
+    "per_sms": "{{n}}¢/SMS",
+    "redirecting": "Redirigiendo…",
+    "start_plan": "Empezar {{name}}",
+    "free": "Gratis",
+    "start_trial": "Comenzar prueba gratis",
+    "enterprise": "Empresarial",
+    "custom": "A medida",
+    "enterprise_desc": "Varias ubicaciones, personas de IA personalizadas e integraciones a medida.",
+    "contact_sales": "Contactar a ventas",
+    "footnote": "Los planes se actualizan desde el panel de administración; los precios mostrados están siempre al día.",
+    "home": "Inicio",
+    "get_started": "Comenzar"
   }
 }
