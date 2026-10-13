@@ -5,6 +5,7 @@ import CanonicalLink from "../components/CanonicalLink";
 import Landing from "../pages/Landing";
 import { Privacy, Terms } from "../pages/Legal";
 import IndustryLanding from "../pages/IndustryLanding";
+import SleepCheck from "../pages/SleepCheck";
 import { INDUSTRY_SLUGS, INDUSTRY_PATHS } from "../config/industries";
 
 // EMP-WL-002: waitlist-only build (REACT_APP_WAITLIST_ONLY=true). Only these three paths exist;
@@ -22,6 +23,7 @@ export function WaitlistRoutes() {
       <Route path="/" element={<Landing />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
+      <Route path="/sleep-check" element={<SleepCheck />} />
       {INDUSTRY_SLUGS.map((s) => <Route key={s} path={`/${s}`} element={<IndustryLanding slug={s} />} />)}
       {INDUSTRY_SLUGS.map((s) => <Route key={`es-${s}`} path={`/es/${s}`} element={<IndustryLanding slug={s} lang="es" />} />)}
       <Route path="*" element={<Navigate to="/" replace />} />
