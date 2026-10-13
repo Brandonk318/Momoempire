@@ -23,3 +23,18 @@ test("brand comes from env with the provisional defaults", () => {
   expect(brandConfig({})).toEqual({ name: DEFAULT_BRAND_NAME, slogan: DEFAULT_BRAND_SLOGAN });
   expect(brandConfig({ REACT_APP_BRAND_NAME: " Acme ", REACT_APP_BRAND_SLOGAN: "Hi" })).toEqual({ name: "Acme", slogan: "Hi" });
 });
+
+test("source map 'mappings' noise is ignored, but a real leak in a map is still caught", () => {
+  const os = require("os");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "leak-"));
+  try {
+    fs.writeFileSync(path.join(dir, "a.js.map"), JSON.stringify({ version: 3, sources: ["src/a.js"], names: [], mappings: "AAAA,EAAMomO,IAEzB" }));
+    expect(findLeaks(dir)).toEqual([]);
+    fs.writeFileSync(path.join(dir, "b.js.map"), JSON.stringify({ version: 3, sources: ["src/b.js"], sourcesContent: ["const x = 'Momo';"], mappings: "AAAA" }));
+    expect(findLeaks(dir)).toEqual(["b.js.map"]);
+    fs.writeFileSync(path.join(dir, "c.js"), "var a='MomO'");
+    expect(findLeaks(dir).sort()).toEqual(["b.js.map", "c.js"]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

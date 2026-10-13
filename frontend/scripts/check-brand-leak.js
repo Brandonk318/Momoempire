@@ -16,8 +16,22 @@ function walk(dir, out = []) {
   return out;
 }
 
+// A source map's "mappings" field is base64 VLQ, so it can contain "momo" by chance (seen on
+// Oct 13: "...MomO..." in main.js.map), which failed the build at random. Check every other
+// field of a map (file, sources, sourcesContent, names), where a real leak would show up.
+function textToCheck(f) {
+  const raw = fs.readFileSync(f, "utf8");
+  if (path.extname(f) !== ".map") return raw;
+  try {
+    const { mappings, ...rest } = JSON.parse(raw); // eslint-disable-line no-unused-vars
+    return JSON.stringify(rest);
+  } catch {
+    return raw;
+  }
+}
+
 function findLeaks(dir) {
-  return walk(dir).filter((f) => PATTERN.test(fs.readFileSync(f, "utf8"))).map((f) => path.relative(dir, f));
+  return walk(dir).filter((f) => PATTERN.test(textToCheck(f))).map((f) => path.relative(dir, f));
 }
 
 module.exports = { findLeaks, PATTERN };
