@@ -18,6 +18,7 @@ import {
   Headphones, ChevronDown, Check,
 } from "lucide-react";
 
+import { CONTACT_EMAIL } from "@/config/contact";
 const PILLAR_META = [
   { icon: Bot, titleKey: "landing.pillar_receptionist_title", descKey: "landing.pillar_receptionist_desc", testid: "pillar-receptionist" },
   { icon: Target, titleKey: "landing.pillar_sales_title", descKey: "landing.pillar_sales_desc", testid: "pillar-sales" },
@@ -378,7 +379,7 @@ export default function Landing({ industry = null }) {
             <div className="overline text-white/70 mb-3">{t("landing.footer_company")}</div>
             <ul className="space-y-2">
               <li><a href="#waitlist" className="hover:text-white">{t("landing.footer_early_access")}</a></li>
-              <li><a href="mailto:hello@aioffice.io" className="hover:text-white">{t("landing.footer_contact")}</a></li>
+              <li><a href={`mailto:${CONTACT_EMAIL}`} className="hover:text-white">{t("landing.footer_contact")}</a></li>
             </ul>
           </div>
           <div>

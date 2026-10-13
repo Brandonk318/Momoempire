@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { startStripeCheckout } from "@/lib/checkout";
 
+import { CONTACT_EMAIL } from "@/config/contact";
 export default function Billing() {
   const [plans, setPlans] = useState([]);
   const [tenant, setTenant] = useState(null);
@@ -87,7 +88,7 @@ export default function Billing() {
               <div className="font-display text-3xl mt-1">Custom pricing</div>
               <div className="text-sm text-muted-foreground mt-2 max-w-xl">Custom AI minutes, locations, users, phone numbers, personas, integrations, and workflows. Fair-use policies apply.</div>
             </div>
-            <Button variant="outline" asChild><a href="mailto:sales@aioffice.io">Contact sales</a></Button>
+            <Button variant="outline" asChild><a href={`mailto:${CONTACT_EMAIL}`}>Contact sales</a></Button>
           </div>
         </div>
       )}

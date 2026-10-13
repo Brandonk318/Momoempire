@@ -1,6 +1,7 @@
 """Phase 9 features: 24h appointment auto-confirmation, review-request autopilot (2h),
 call-back scheduler, service-area heatmap, Google Calendar ICS export for standup."""
 import os
+from site_contact import contact_email
 import re
 import json
 import logging
@@ -224,7 +225,7 @@ async def _geocode_zip(zip_code: str, country: str = "us") -> dict | None:
             r = await hc.get(
                 "https://nominatim.openstreetmap.org/search",
                 params={"postalcode": zip_code, "country": country, "format": "json", "limit": 1},
-                headers={"User-Agent": "ai-office-platform/1.0 (contact: ops@aioffice.io)"},
+                headers={"User-Agent": f"ai-office-platform/1.0 (contact: {contact_email()})"},
             )
         rows = r.json() or []
         if not rows:

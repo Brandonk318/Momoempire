@@ -685,11 +685,17 @@ async def _send_waitlist_confirmation(email: str) -> None:
     if not confirmation_email_enabled():  # defense in depth; the endpoint already skips it
         return
     try:
+        from html import escape
         from services.email import send_email, _frame
+        from site_contact import site_url
+        # No hard-coded domain: link the site only when SITE_URL is set. The old sentence linked
+        # a free trial on /pricing, which the waitlist build doesn't have (TODO(Brann): wording).
+        site = site_url()
+        more = (f" In the meantime, you can visit <a href='{escape(site, quote=True)}/'>our website</a>." if site else "")
         html = _frame(
             "<p style='font-size:20px;margin:4px 0 10px'>You're on the list ✨</p>"
-            "<p style='color:#555'>Thanks for raising your hand. We'll reach out as soon as your industry seat opens up. "
-            "In the meantime, you can also try the free trial anytime at <a href='https://www.aioffice.io/pricing'>our pricing page</a>.</p>",
+            "<p style='color:#555'>Thanks for raising your hand. We'll reach out as soon as your industry seat opens up."
+            + more + "</p>",
             app_name="AI Office",
         )
         await send_email(to=email, subject="You're on the AI Office waitlist", html=html)
