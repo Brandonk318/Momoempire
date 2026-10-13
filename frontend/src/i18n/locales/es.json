@@ -225,7 +225,8 @@
     "voice_ended_title": "Demo de voz terminada",
     "voice_ended_sub": "Pruebe la demo de texto, o inicie la prueba gratis para la oficina completa.",
     "voice_try_text": "Probar demo de texto",
-    "voice_off_by_default_hint": "El modo de voz está desactivado por defecto hasta que el equipo lo habilite (control de costos)."
+    "voice_off_by_default_hint": "El modo de voz está desactivado por defecto hasta que el equipo lo habilite (control de costos).",
+    "demo_expired": "La demo expiró. Elija una industria para empezar otra."
   },
   "repeat": {
     "title": "Agenda Recurrente",
