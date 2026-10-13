@@ -31,6 +31,7 @@ test.each(INDUSTRY_SLUGS.flatMap((s) => [[s, "en"], [s, "es"]]))("%s (%s) render
   const { el, done } = mount(slug, lang);
   expect(el.querySelector(`[data-testid="industry-page-${slug}"]`).getAttribute("lang")).toBe(lang);
   expect(el.querySelector("h1").textContent).toBe(copy.title);
+  expect(copy.sub).toContain(require("../config/brand").BRAND_NAME); // brand comes from the central config
   expect(el.querySelector('[data-testid="waitlist-form"]')).not.toBeNull();
   expect(el.querySelector('[data-testid="waitlist-industry"]').value).toBe(copy.formIndustry);
   // Only the waitlist claims: product sections (features, demo, FAQ, preview chat) are hidden.

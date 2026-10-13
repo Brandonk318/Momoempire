@@ -17,5 +17,6 @@ else
 fi
 CI=true yarn build
 test -f build/index.html || { echo 'ERROR: build/index.html was not produced' >&2; exit 3; }
+node scripts/check-brand-leak.js build
 node scripts/check-no-legacy-domain.js build
 echo 'Local frontend build PASSED; this does NOT verify Cloudflare preview, API, Stripe or production readiness.'

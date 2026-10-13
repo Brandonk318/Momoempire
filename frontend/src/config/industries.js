@@ -3,6 +3,8 @@
 // claim below maps to evidence listed in the PR. Do not add product-feature claims here until
 // those features are live and verified.
 
+const { BRAND_NAME } = require("./brand");
+
 const INDUSTRY_SLUGS = ["hvac", "plumbing", "electrical", "roofing", "landscaping"];
 
 const NAMES = {
@@ -20,7 +22,7 @@ function copyFor(slug, lang) {
     return {
       label: n,
       title: `Acceso anticipado para negocios de ${NAMES[slug].esNoun}.`,
-      sub: `Estamos preparando la versión para ${NAMES[slug].esNoun}. Únase a la lista de acceso anticipado y le avisaremos cuando se abran lugares.`,
+      sub: `Estamos preparando ${BRAND_NAME} para ${NAMES[slug].esNoun}. Únase a la lista de acceso anticipado y le avisaremos cuando se abran lugares.`,
       pointsTitle: "Cómo funciona la lista",
       points: [
         "Un formulario corto: solo el email es obligatorio",
@@ -34,7 +36,7 @@ function copyFor(slug, lang) {
   return {
     label: n,
     title: `Early access for ${n} businesses.`,
-    sub: `We're getting the ${n} version ready. Join the early-access list and we'll reach out when seats open.`,
+    sub: `We're getting ${BRAND_NAME} ready for ${n} businesses. Join the early-access list and we'll reach out when seats open.`,
     pointsTitle: "How the list works",
     points: [
       "One short form: only your email is required",

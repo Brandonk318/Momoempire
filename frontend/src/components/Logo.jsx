@@ -1,3 +1,4 @@
+import { BRAND_NAME } from "@/config/brand";
 // variant: "auto" (default) follows the light/dark theme via currentColor; "dark"/"light" are fixed inks.
 export function Logo({ className = "", mark = true, variant = "auto" }) {
   const auto = variant === "auto";
@@ -14,7 +15,7 @@ export function Logo({ className = "", mark = true, variant = "auto" }) {
         </svg>
       )}
       <span className="font-display text-[18px] font-semibold tracking-tight" style={{ color: inkMain }}>
-        AI Office
+        {BRAND_NAME}
       </span>
     </div>
   );
