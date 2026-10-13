@@ -4,7 +4,7 @@
     "nav_industries": "Industries",
     "nav_faq": "FAQ",
     "cta_join_waitlist": "Join waitlist",
-    "badge_platform": "AI Office Platform",
+    "badge_platform": "{{brand}}",
     "hero_title_lead": "We build you an AI employee",
     "hero_title_trail": "and a digital office.",
     "hero_sub": "Your business never misses a call again. The AI answers, books jobs, follows up with warm leads, and brings you a weekly summary — on autopilot, in your voice.",

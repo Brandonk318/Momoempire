@@ -19,6 +19,7 @@ import {
   Headphones, ChevronDown, Check, Snowflake, Flame, Thermometer, Wind, Fan,
 } from "lucide-react";
 
+import { BRAND_NAME } from "@/config/brand";
 import { CONTACT_EMAIL } from "@/config/contact";
 import RoiCalculator from "../components/roi/RoiCalculator";
 import WorkflowDiagrams from "../components/roi/WorkflowDiagrams";
@@ -427,7 +428,7 @@ export default function Landing({ industry = null }) {
             </ul>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto px-6 pb-8 text-[11px] text-white/60">© {new Date().getFullYear()} AI Office · {t("landing.footer_rights")}</div>
+        <div className="max-w-7xl mx-auto px-6 pb-8 text-[11px] text-white/60">© {new Date().getFullYear()} {BRAND_NAME} · {t("landing.footer_rights")}</div>
       </footer>
     </div>
   );

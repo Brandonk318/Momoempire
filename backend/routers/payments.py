@@ -1,5 +1,6 @@
 """Stripe-powered subscription checkout. Uses admin-configured Stripe price IDs when set."""
 import os
+from brand import brand_name
 import stripe
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request, Depends
@@ -55,7 +56,7 @@ async def create_checkout(req: CheckoutRequest, user: dict = Depends(require_ten
         line_item = {
             "price_data": {
                 "currency": "usd",
-                "product_data": {"name": f"AI Office — {plan['name']}"},
+                "product_data": {"name": f"{brand_name()} — {plan['name']}"},
                 "unit_amount": plan["price_cents"],
                 "recurring": {"interval": "month"},
             },

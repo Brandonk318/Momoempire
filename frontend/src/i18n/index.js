@@ -1,6 +1,7 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
+import { BRAND_NAME, BRAND_SLOGAN } from "../config/brand";
 
 // EMP-WL-093: the waitlist-only build bundles only the waitlist strings, not the full
 // translation files (trial, pricing, login, billing, dashboard...). The condition is a build-time
@@ -20,7 +21,8 @@ i18n
     },
     fallbackLng: "en",
     supportedLngs: ["en", "es"],
-    interpolation: { escapeValue: false },
+    // {{brand}} / {{slogan}} in any string resolve to the central brand config.
+    interpolation: { escapeValue: false, defaultVariables: { brand: BRAND_NAME, slogan: BRAND_SLOGAN } },
     detection: {
       order: ["localStorage", "navigator"],
       caches: ["localStorage"],

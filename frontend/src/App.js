@@ -12,6 +12,7 @@ import Pricing from "@/pages/Pricing";
 import Estimate from "@/pages/Estimate";
 import { Privacy, Terms } from "@/pages/Legal";
 import IndustryLanding from "@/pages/IndustryLanding";
+import SleepCheck from "@/pages/SleepCheck";
 import { INDUSTRY_SLUGS } from "@/config/industries";
 import Login from "@/pages/Login";
 import SetPassword from "@/pages/SetPassword";
@@ -88,6 +89,7 @@ function Router() {
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/estimate" element={<Estimate />} />
       <Route path="/privacy" element={<Privacy />} />
+      <Route path="/sleep-check" element={<SleepCheck />} />
       <Route path="/terms" element={<Terms />} />
       {INDUSTRY_SLUGS.map((s) => <Route key={s} path={`/${s}`} element={<IndustryLanding slug={s} />} />)}
       {INDUSTRY_SLUGS.map((s) => <Route key={`es-${s}`} path={`/es/${s}`} element={<IndustryLanding slug={s} lang="es" />} />)}

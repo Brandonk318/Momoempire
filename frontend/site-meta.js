@@ -6,8 +6,11 @@
 // TODO(Brann): brand name, description, domain and share image are Brann's decision. Until set,
 // the existing title/description are used, no sitemap is generated and no og:image is emitted.
 
-const DEFAULT_SITE_NAME = "Empire AI Office"; // TODO(Brann): brand name (current <title> kept)
-const DEFAULT_DESCRIPTION = "Empire AI Office platform"; // TODO(Brann): marketing description
+// Brand name and slogan come from the one central config (src/config/brand.js,
+// REACT_APP_BRAND_NAME / REACT_APP_BRAND_SLOGAN). REACT_APP_SITE_NAME / _DESCRIPTION still override.
+const { brandConfig } = require("./src/config/brand");
+const DEFAULT_SITE_NAME = brandConfig().name;
+const DEFAULT_DESCRIPTION = brandConfig().slogan;
 
 const { INDUSTRY_PATHS } = require("./src/config/industries");
 
@@ -36,8 +39,8 @@ function absoluteUrl(name, raw) {
 function siteConfig(env = process.env) {
   const siteUrl = absoluteUrl("REACT_APP_SITE_URL", env.REACT_APP_SITE_URL).replace(/\/+$/, "");
   return {
-    name: clean(env.REACT_APP_SITE_NAME) || DEFAULT_SITE_NAME,
-    description: clean(env.REACT_APP_SITE_DESCRIPTION) || DEFAULT_DESCRIPTION,
+    name: clean(env.REACT_APP_SITE_NAME) || brandConfig(env).name,
+    description: clean(env.REACT_APP_SITE_DESCRIPTION) || brandConfig(env).slogan,
     siteUrl,
     ogImage: absoluteUrl("REACT_APP_OG_IMAGE_URL", env.REACT_APP_OG_IMAGE_URL),
     waitlistOnly: env.REACT_APP_WAITLIST_ONLY === "true",
