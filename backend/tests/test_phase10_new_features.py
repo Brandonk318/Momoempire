@@ -13,7 +13,7 @@ ADMIN_EMAIL = os.environ.get("ADMIN_TEST_EMAIL", "admin@example.test")  # WL-044
 ADMIN_PASSWORD = "AdminPass123!"
 
 # Pull cron secret from env; fallback to the known test secret
-CRON_SECRET = os.environ.get("WEBHOOK_CRON_SECRET", "cCqJd3dYtqZFbOt8c33ogrAMWLhhm1Ilg_1BdJ1-b0E")
+CRON_SECRET = os.environ.get("WEBHOOK_CRON_SECRET")  # no fallback: tests that need it skip when unset
 
 
 @pytest.fixture(scope="module")
@@ -118,6 +118,7 @@ class TestCronRepeatReminders:
         r = requests.post(f"{API}/cron/repeat-reminders", timeout=15)
         assert r.status_code == 401
 
+    @pytest.mark.skipif(not CRON_SECRET, reason="WEBHOOK_CRON_SECRET not set")
     def test_authorized(self):
         r = requests.post(f"{API}/cron/repeat-reminders",
                           headers={"Authorization": f"Bearer {CRON_SECRET}"}, timeout=20)
