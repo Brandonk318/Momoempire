@@ -1,9 +1,9 @@
-// Public brand, set at build time. PROVISIONAL and NOT legally cleared: the name and slogan are
-// already used by others (trademark research, Oct 2026), so keep them configurable and decide
-// before launch. Override with REACT_APP_BRAND_NAME / REACT_APP_BRAND_SLOGAN.
+// Public brand, set at build time. The real brand is ON HOLD until Brann's DBA is registered, so
+// the defaults are neutral placeholders. Set REACT_APP_BRAND_NAME / REACT_APP_BRAND_SLOGAN before
+// any public launch.
 // Kept as plain CommonJS so craco/site-meta.js (Node) and the app share one source of defaults.
-const DEFAULT_BRAND_NAME = "The HVAC Empire AI Office";
-const DEFAULT_BRAND_SLOGAN = "Never Miss Another Service Call";
+const DEFAULT_BRAND_NAME = "Your Business Name";
+const DEFAULT_BRAND_SLOGAN = "Your slogan here";
 
 function clean(v) {
   return typeof v === "string" ? v.trim() : "";

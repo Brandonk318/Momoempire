@@ -5,8 +5,8 @@ import brand
 def test_defaults(monkeypatch):
     monkeypatch.delenv("BRAND_NAME", raising=False)
     monkeypatch.delenv("BRAND_SLOGAN", raising=False)
-    assert brand.brand_name() == "The HVAC Empire AI Office"
-    assert brand.brand_slogan() == "Never Miss Another Service Call"
+    assert brand.brand_name() == "Your Business Name"
+    assert brand.brand_slogan() == "Your slogan here"
 
 
 def test_env_override(monkeypatch):
