@@ -20,6 +20,9 @@ import {
 } from "lucide-react";
 
 import { CONTACT_EMAIL } from "@/config/contact";
+import RoiCalculator from "../components/roi/RoiCalculator";
+import WorkflowDiagrams from "../components/roi/WorkflowDiagrams";
+import { ROI_PAGES } from "../config/roi";
 const PILLAR_META = [
   { icon: Bot, titleKey: "landing.pillar_receptionist_title", descKey: "landing.pillar_receptionist_desc", testid: "pillar-receptionist" },
   { icon: Target, titleKey: "landing.pillar_sales_title", descKey: "landing.pillar_sales_desc", testid: "pillar-sales" },
@@ -215,6 +218,13 @@ export default function Landing({ industry = null }) {
           </div>
         </div>
       </section>
+
+      {industry && ROI_PAGES.includes(industry.slug) && (
+        <section id="roi" className="relative max-w-7xl mx-auto px-4 sm:px-6 py-12 space-y-12">
+          <RoiCalculator niche={industry.slug} lang={industry.lang} />
+          <WorkflowDiagrams lang={industry.lang} />
+        </section>
+      )}
 
       {!industry && (<>
       {/* Features */}
