@@ -43,9 +43,7 @@ def test_health():
     assert r.status_code == 200
 
 
-def test_public_pricing_renders():
-    r = requests.get(f"{BASE}/pricing")
-    assert r.status_code == 200
+# /pricing page was removed from the app; its render check was dropped.
 
 
 # ---------- Objections CRUD ----------
