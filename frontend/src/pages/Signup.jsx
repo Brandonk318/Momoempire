@@ -14,6 +14,7 @@ import {
   resumePendingCheckoutIfAny,
 } from "@/lib/checkout";
 
+import { BRAND_NAME } from "@/config/brand";
 export default function Signup() {
   const [name, setName] = useState("");
   const [businessName, setBusinessName] = useState("");
@@ -62,7 +63,7 @@ export default function Signup() {
         <div className="relative">
           <Logo variant="light" />
           <h2 className="font-display text-5xl mt-8 text-white tracking-tight leading-[1.05] max-w-md">
-            Open your AI Office<br /> in two minutes.
+            Open your {BRAND_NAME}<br /> in two minutes.
           </h2>
           <p className="text-white/60 mt-4 max-w-sm">A workspace built on battle-tested hardware, with a brand that stays yours forever.</p>
           {isPaidCheckoutPlan(planFromQuery) && (
