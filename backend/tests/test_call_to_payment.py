@@ -49,6 +49,8 @@ WEBHOOK_CRON_SECRET = BACKEND_ENV.get("WEBHOOK_CRON_SECRET", "")
 MONGO_URL = BACKEND_ENV.get("MONGO_URL", "mongodb://localhost:27017")
 DB_NAME = BACKEND_ENV.get("DB_NAME", "ai_office_platform")
 
+TEST_CONNECT_ACCOUNT = "acct_test_connected"  # fake Connect account id used by TestWebhooks
+
 mongo_client = MongoClient(MONGO_URL)
 db = mongo_client[DB_NAME]
 
@@ -278,6 +280,17 @@ class TestConnect:
 # ============================================================
 @pytest.mark.skipif(not STRIPE_WEBHOOK_SECRET, reason="Stripe test keys not set (STRIPE_WEBHOOK_SECRET)")
 class TestWebhooks:
+    @pytest.fixture(autouse=True, scope="class")
+    def _tenant_a_connected(self, tenant_a_me):
+        """The Connect webhook only applies payments whose event `account` is the invoice tenant's
+        stripe_connect_id (stripe-webhook followups). Give the test tenant the account the events
+        below use, so these tests exercise that real path. Test DB only; restored afterwards."""
+        tid = tenant_a_me["tenant_id"]
+        before = db.tenants.find_one({"id": tid}, {"_id": 0, "stripe_connect_id": 1}) or {}
+        db.tenants.update_one({"id": tid}, {"$set": {"stripe_connect_id": TEST_CONNECT_ACCOUNT}})
+        yield
+        db.tenants.update_one({"id": tid}, {"$set": {"stripe_connect_id": before.get("stripe_connect_id")}})
+
     def test_invalid_signature_returns_400(self):
         payload = json.dumps({"id": "evt_bad", "type": "ping", "data": {"object": {}}}).encode()
         r = requests.post(f"{BASE_URL}/api/stripe/connect-webhook", data=payload,
@@ -298,14 +311,23 @@ class TestWebhooks:
         ev = {
             "id": f"evt_{uuid.uuid4().hex}",
             "type": "payment_intent.succeeded",
-            "account": "acct_test_connected",
+            "account": TEST_CONNECT_ACCOUNT,
             "data": {"object": {
                 "id": f"pi_{uuid.uuid4().hex[:20]}",
                 "amount_received": total,
                 "amount": total,
+                "currency": (inv.get("currency") or "usd").lower(),  # the webhook checks currency too
                 "metadata": {"tenant_id": tid, "invoice_id": pytest.invoice_id},
             }}
         }
+        # The webhook only applies PaymentIntents the app created (the /pay endpoint records them,
+        # but that needs real Stripe keys). Record it the same way, in the test DB only.
+        db.invoice_payments.insert_one({
+            "id": f"ip_{uuid.uuid4().hex[:12]}", "tenant_id": tid, "invoice_id": pytest.invoice_id,
+            "stripe_payment_intent_id": ev["data"]["object"]["id"], "connected_account": TEST_CONNECT_ACCOUNT,
+            "amount_cents": total, "status": "requires_payment_method",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
         payload = json.dumps(ev).encode()
         headers = _signed_headers(payload)
         r = requests.post(f"{BASE_URL}/api/stripe/connect-webhook", data=payload, headers=headers, timeout=30)
@@ -332,7 +354,7 @@ class TestWebhooks:
         ev = {
             "id": f"evt_{uuid.uuid4().hex}",
             "type": "charge.refunded",
-            "account": "acct_test_connected",
+            "account": TEST_CONNECT_ACCOUNT,
             "data": {"object": {
                 "id": f"ch_{uuid.uuid4().hex[:16]}",
                 "payment_intent": pi_id,
@@ -353,7 +375,7 @@ class TestWebhooks:
         ev = {
             "id": f"evt_{uuid.uuid4().hex}",
             "type": "payment_intent.payment_failed",
-            "account": "acct_test_connected",
+            "account": TEST_CONNECT_ACCOUNT,
             "data": {"object": {
                 "id": pi_id,
                 "amount": 1000,
@@ -374,7 +396,7 @@ class TestWebhooks:
         ev = {
             "id": f"evt_{uuid.uuid4().hex}",
             "type": "charge.dispute.created",
-            "account": "acct_test_connected",
+            "account": TEST_CONNECT_ACCOUNT,
             "data": {"object": {
                 "id": f"dp_{uuid.uuid4().hex[:12]}",
                 "payment_intent": pi_id,
