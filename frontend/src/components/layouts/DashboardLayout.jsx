@@ -86,12 +86,13 @@ export default function DashboardLayout({ children }) {
   }, [user?.tenant_id, location.pathname, i18n, user?.lang]);
 
   // Apply tenant branding tokens to CSS vars
+  // Same deps as before (the two colors), read into locals so the hook lint can see them.
+  const brandPrimary = tenant?.branding?.primary_color;
+  const brandAccent = tenant?.branding?.accent_color;
   useEffect(() => {
-    if (!tenant?.branding) return;
-    const b = tenant.branding;
-    if (b.primary_color) document.documentElement.style.setProperty("--tenant-primary", b.primary_color);
-    if (b.accent_color) document.documentElement.style.setProperty("--tenant-accent", b.accent_color);
-  }, [tenant?.branding?.primary_color, tenant?.branding?.accent_color]);
+    if (brandPrimary) document.documentElement.style.setProperty("--tenant-primary", brandPrimary);
+    if (brandAccent) document.documentElement.style.setProperty("--tenant-accent", brandAccent);
+  }, [brandPrimary, brandAccent]);
 
   const needsOnboarding = user?.tenant_id && tenant && !tenant.onboarding_complete;
 
