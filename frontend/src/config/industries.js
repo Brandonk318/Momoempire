@@ -6,11 +6,12 @@
 const INDUSTRY_SLUGS = ["hvac", "plumbing", "electrical", "roofing", "landscaping"];
 
 const NAMES = {
-  hvac: { en: "HVAC", es: "HVAC (climatización)" },
-  plumbing: { en: "Plumbing", es: "Plomería" },
-  electrical: { en: "Electrical", es: "Electricidad" },
-  roofing: { en: "Roofing", es: "Techos" },
-  landscaping: { en: "Landscaping", es: "Jardinería y paisajismo" },
+  // es.noun is used mid-sentence ("negocios de ..."), so it keeps its own capitalization.
+  hvac: { en: "HVAC", es: "HVAC (climatización)", esNoun: "HVAC y climatización" },
+  plumbing: { en: "Plumbing", es: "Plomería", esNoun: "plomería" },
+  electrical: { en: "Electrical", es: "Electricidad", esNoun: "electricidad" },
+  roofing: { en: "Roofing", es: "Techos", esNoun: "techos" },
+  landscaping: { en: "Landscaping", es: "Jardinería y paisajismo", esNoun: "jardinería y paisajismo" },
 };
 
 function copyFor(slug, lang) {
@@ -18,8 +19,8 @@ function copyFor(slug, lang) {
   if (lang === "es") {
     return {
       label: n,
-      title: `Acceso anticipado para negocios de ${n.toLowerCase()}.`,
-      sub: `Estamos preparando la versión para ${n.toLowerCase()}. Únase a la lista de acceso anticipado y le avisaremos cuando se abran lugares.`,
+      title: `Acceso anticipado para negocios de ${NAMES[slug].esNoun}.`,
+      sub: `Estamos preparando la versión para ${NAMES[slug].esNoun}. Únase a la lista de acceso anticipado y le avisaremos cuando se abran lugares.`,
       pointsTitle: "Cómo funciona la lista",
       points: [
         "Un formulario corto: solo el email es obligatorio",

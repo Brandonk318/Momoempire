@@ -368,8 +368,8 @@ export default function Landing({ industry = null }) {
           <div>
             <div className="overline text-white/70 mb-3">{t("landing.footer_product")}</div>
             <ul className="space-y-2">
-              <li><a href="#features" className="hover:text-white">{t("landing.nav_features")}</a></li>
-              <li><a href="#industries" className="hover:text-white">{t("landing.nav_industries")}</a></li>
+              <li><a href={industry ? "/#features" : "#features"} className="hover:text-white">{t("landing.nav_features")}</a></li>
+              <li><a href={industry ? "/#industries" : "#industries"} className="hover:text-white">{t("landing.nav_industries")}</a></li>
               {!waitlistOnly && <li><Link to="/pricing" className="hover:text-white">{t("landing.nav_pricing")}</Link></li>}
               {!waitlistOnly && <li><a href="#demo" className="hover:text-white">{t("landing.nav_demo")}</a></li>}
             </ul>
