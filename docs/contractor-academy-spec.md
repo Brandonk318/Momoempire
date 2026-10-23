@@ -567,3 +567,10 @@ Each module below follows the voice style: short beats, ellipses for pauses, one
 1. Clock pie: field time vs. office time
 2. Before/after: owner doing everything vs. owner in field + office hire
 3. Counter: hours freed × your billable rate = monthly gain
+
+## 11. Community layer
+
+- A private forum or Discord where contractors who've completed modules can ask each other questions — peer-to-peer help (a roofer in Dallas helping a plumber in Houston with job costing).
+- Two jobs: keeps people engaged between modules, and surfaces the exact pain points the next round of content should target.
+- Effectively crowdsources the curriculum.
+- Free for all academy users; no separate paywall. Moderated by Brann or a designated bot.
